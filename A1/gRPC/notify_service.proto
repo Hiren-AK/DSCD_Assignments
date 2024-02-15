@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "market_service.proto";
+
+package notify;
+
+// Message for notification
+message Notification {
+  string message = 1;
+  market.Item updated_item = 2;
+}
+
+message NotificationResponse{
+  bool status = 1;
+}
+
+service NotifyService {
+  rpc NotifyClient(Notification) returns (NotificationResponse);
+}

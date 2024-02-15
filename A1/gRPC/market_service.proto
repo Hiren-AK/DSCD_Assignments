@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package market;
+
+// Enum for item categories
+enum Category {
+  ELECTRONICS = 0;
+  FASHION = 1;
+  OTHERS = 2;
+  ANY= 3;
+}
+
+// Response message containing operation status
+message Response {
+  bool success = 1;
+  string message = 2; // To send additional information about the operation
+}
+
+// Message for seller login
+message LoginSellerRequest {
+  string uuid = 1;
+}
+
+// Message for buyer login
+message LoginBuyerRequest {
+  string uuid = 1;
+}
+
+// Message for seller registration
+message RegisterSellerRequest {
+  string ip_address = 1;
+  string port = 2;
+  string uuid = 3;
+}
+
+// Message for Buyer registration
+message RegisterBuyerRequest {
+  string ip_address = 1;
+  string port = 2;
+  string uuid = 3;
+}
+
+// Message to register notification service for seller
+message NotificationSellerAddressRequest {
+  string address = 1;
+  string uuid = 2;
+}
+
+// Message to register notification service for buyer
+message NotificationBuyerAddressRequest {
+  string address = 1;
+  string uuid = 2;
+}
+
+// Message for selling an item
+message SellItemRequest {
+  string product_name = 1;
+  Category category = 2;
+  int32 quantity = 3;
+  string description = 4;
+  string seller_address = 5;
+  float price_per_unit = 6;
+  string uuid = 7;
+}
+
+// Message for buying an item
+message BuyItemRequest {
+  int32 item_id = 1;
+  int32 quantity = 2;
+  string buyer_address = 3;
+  string buyer_uuid = 4;
+}
+
+// Message for adding an item to wishlist
+message AddToWishListRequest {
+  int32 item_id = 1;
+  string buyer_address = 2;
+  string buyer_uuid = 3;
+}
+
+// Message for rating an item
+message RateItemRequest {
+  int32 item_id = 1;
+  int32 rating = 2; // Rating from 1 to 5
+  string buyer_address = 3;
+  string buyer_uuid = 4;
+}
+
+// Message for updating an item
+message UpdateItemRequest {
+  int32 item_id = 1;
+  float new_price = 2;
+  int32 new_quantity = 3;
+  string seller_address = 4;
+  string uuid = 5;
+}
+
+// Message for deleting an item
+message DeleteItemRequest {
+  int32 item_id = 1;
+  string seller_address = 2;
+  string uuid = 3;
+}
+
+// Message for displaying seller's items
+message DisplaySellerItemsRequest {
+  string seller_address = 1;
+  string uuid = 2; // Optional
+}
+
+// Item details
+message Item {
+  int32 id = 1;
+  string name = 2;
+  Category category = 3;
+  string description = 4;
+  int32 quantity = 5;
+  float price = 6;
+  string seller_address = 7;
+  float rating = 8;
+}
+
+// Message for searching items
+message SearchItemRequest {
+  string item_name = 1;
+  Category category = 2;
+}
+
+// Message for list of items (response to DisplaySellerItemsRequest)
+message ItemList {
+  repeated Item items = 1;
+}
+
+service MarketService {
+  rpc RegisterSeller(RegisterSellerRequest) returns (Response);
+  rpc RegisterBuyer(RegisterBuyerRequest) returns (Response);
+  rpc SellItem(SellItemRequest) returns (Response);
+  rpc UpdateItem(UpdateItemRequest) returns (Response);
+  rpc DeleteItem(DeleteItemRequest) returns (Response);
+  rpc DisplaySellerItems(DisplaySellerItemsRequest) returns (ItemList);
+  rpc LoginSeller(LoginSellerRequest) returns (Response);
+  rpc LoginBuyer(LoginBuyerRequest) returns (Response);
+  rpc NotificationSellerAddress(NotificationSellerAddressRequest) returns (Response);
+  rpc NotificationBuyerAddress(NotificationBuyerAddressRequest) returns (Response);
+  rpc SearchItem(SearchItemRequest) returns (ItemList);
+  rpc BuyItem(BuyItemRequest) returns (Response);
+  rpc AddToWishList(AddToWishListRequest) returns (Response);
+  rpc RateItem(RateItemRequest) returns (Response);
+}
