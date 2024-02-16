@@ -1,4 +1,5 @@
 # gRPC 
+
 ## Market System gRPC Services
 This README provides instructions on compiling the provided gRPC services using the included Makefile and an overview of the code structure of a market system that includes functionalities for sellers, buyers, notifications, and search.
 
@@ -35,4 +36,37 @@ Makefile: A Makefile is provided to compile the .proto files into Python code us
 # RabbitMQ
 
 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+YouTube Notification System with RabbitMQ
+
+Clone the Repository:
+git clone <repository_url>
+
+Install Dependencies:
+pip install -r requirements.txt
+
+RabbitMQ Installation:
+
+Install RabbitMQ on your system or use a cloud-based RabbitMQ service.
+Ensure RabbitMQ is running and accessible.
+
+The system consists of the following components:
+
+1. User Application (User.py): Allows users to subscribe, unsubscribe, and receive notifications for videos uploaded by subscribed YouTubers.
+2. YouTuber Application (YouTuber.py): Enables YouTubers to publish videos, which are processed by the server, and notifications are sent to subscribed users.
+3. YouTube Server (YouTubeServer.py): Central server responsible for handling user requests, YouTuber uploads, and notification delivery.
+
+
+Run the YouTube Server:
+python YouTubeServer.py
+
+Users can subscribe or unsubscribe to YouTubers and receive notifications:
+
+python User.py <username> <action> <youtuber_name>
+
+YouTubers can publish videos:
+
+python YouTuber.py <youtuber_name> <video_name>
+
+Prerequisites
+Ensure Python and RabbitMQ are installed on your system.
+Make sure RabbitMQ is running and accessible.
