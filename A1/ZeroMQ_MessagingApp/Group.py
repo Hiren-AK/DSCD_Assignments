@@ -55,7 +55,10 @@ class GroupServer:
                 if len(multipart_message) > 3:
                     timestamp = multipart_message[3].decode("utf-8")
                 # self.fetch_messages(message, timestamp)
-                threading.Thread(target=self.store_message, args=(identity, action_parts[1], action_parts[2])).start()
+                if timestamp :
+                    threading.Thread(target=self.fetch_messages, args=(identity, action_parts[1],action_parts[2])).start()
+                else:
+                    threading.Thread(target=self.fetch_messages, args=(identity, action_parts[1])).start()
                 
                 
     # def register(self):
@@ -93,27 +96,19 @@ class GroupServer:
         self.receive_socket.send_multipart([identity, b"", b"SUCCESS"])
         # self.receive_socket.send_string("SUCCESS")
 
-    def fetch_messages(self, identity, user_uuid, timestamp):
-        if user_uuid in self.USERTELE:
-            if timestamp:
-                filtered_messages = [msg for msg in self.message_history if msg["timestamp"] >= timestamp]
-                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(filtered_messages).encode("utf-8")])
-            else:
-                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(self.message_history).encode("utf-8")])
-        else:
-            self.receive_socket.send_multipart([identity, b"", b"FAIL"])
-
     def fetch_messages(self, identity, user_uuid, timestamp=None):
         if user_uuid in self.USERTELE:
             if timestamp:
                 filtered_messages = [msg for msg in self.message_history if msg["timestamp"] >= timestamp]
-                response_data = "SUCCESS " + str(filtered_messages)
-                self.receive_socket.send_multipart([identity, b"", response_data.encode("utf-8")])  # Encode response
+                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(filtered_messages).encode("utf-8")])
+                return filtered_messages
             else:
-                response_data = "SUCCESS " + str(self.message_history)  # Prefix with "SUCCESS"
-                self.receive_socket.send_multipart([identity, b"", response_data.encode("utf-8")])  # Encode response
+                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(self.message_history).encode("utf-8")])
+                return self.message_history
         else:
             self.receive_socket.send_multipart([identity, b"", b"FAIL"])
+            return None
+
 
 if __name__ == "__main__":
     group = GroupServer()
