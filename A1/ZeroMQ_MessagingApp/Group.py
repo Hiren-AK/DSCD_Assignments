@@ -49,14 +49,22 @@ class GroupServer:
                 # timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
                 threading.Thread(target=self.store_message, args=(identity, action_parts[1], action_parts[2],action_parts[3])).start()
                 # self.store_message(message, timestamp)
+                
             elif action_parts[0] == "fetch_messages":
                 timestamp = None
                 if len(multipart_message) > 3:
                     timestamp = multipart_message[3].decode("utf-8")
-                self.fetch_messages(message, timestamp)
-
+                # self.fetch_messages(message, timestamp)
+                threading.Thread(target=self.store_message, args=(identity, action_parts[1], action_parts[2])).start()
+                
+                
+    # def register(self):
+    #     self.register_socket.send_multipart([b"register", self.name.encode("utf-8"), self.ip.encode("utf-8"), str(self.port).encode("utf-8")])
+    #     response = self.register_socket.recv_string()
+    #     if response == "SUCCESS":
+    #         print("Group server registered successfully.")
     def register(self):
-        self.register_socket.send_multipart([b"register", self.name.encode("utf-8"), self.ip.encode("utf-8"), str(self.port).encode("utf-8")])
+        self.register_socket.send_json({"action": "register", "name": self.name, "ip": self.ip, "port": self.port})
         response = self.register_socket.recv_string()
         if response == "SUCCESS":
             print("Group server registered successfully.")
@@ -92,6 +100,18 @@ class GroupServer:
                 self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(filtered_messages).encode("utf-8")])
             else:
                 self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(self.message_history).encode("utf-8")])
+        else:
+            self.receive_socket.send_multipart([identity, b"", b"FAIL"])
+
+    def fetch_messages(self, identity, user_uuid, timestamp=None):
+        if user_uuid in self.USERTELE:
+            if timestamp:
+                filtered_messages = [msg for msg in self.message_history if msg["timestamp"] >= timestamp]
+                response_data = "SUCCESS " + str(filtered_messages)
+                self.receive_socket.send_multipart([identity, b"", response_data.encode("utf-8")])  # Encode response
+            else:
+                response_data = "SUCCESS " + str(self.message_history)  # Prefix with "SUCCESS"
+                self.receive_socket.send_multipart([identity, b"", response_data.encode("utf-8")])  # Encode response
         else:
             self.receive_socket.send_multipart([identity, b"", b"FAIL"])
 
