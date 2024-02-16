@@ -100,10 +100,10 @@ class GroupServer:
         if user_uuid in self.USERTELE:
             if timestamp:
                 filtered_messages = [msg for msg in self.message_history if msg["timestamp"] >= timestamp]
-                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(filtered_messages).encode("utf-8")])
+                self.receive_socket.send_multipart([identity, b"", str(filtered_messages).encode("utf-8")])
                 return filtered_messages
             else:
-                self.receive_socket.send_multipart([identity, b"", b"SUCCESS"] + [str(self.message_history).encode("utf-8")])
+                self.receive_socket.send_multipart([identity, b"", str(self.message_history).encode("utf-8")] + [str(self.message_history).encode("utf-8")])
                 return self.message_history
         else:
             self.receive_socket.send_multipart([identity, b"", b"FAIL"])
