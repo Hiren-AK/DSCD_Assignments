@@ -89,7 +89,7 @@ class UserClient:
 
         if response.startswith("SUCCESS"):
             print("Message History:")
-            messages = response.split("\n")[1:]  # Remove "SUCCESS" line
+            messages = eval(response.split("SUCCESS ")[1])
             for message in messages:
                 user_uuid, msg, timestamp = message.split(" ")
                 print(f"User: {user_uuid}, Message: {msg}, Timestamp: {timestamp}")
