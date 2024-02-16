@@ -1,22 +1,16 @@
 import pika
 import sys
 import json
-import ssl
 
 class Youtuber:
     def __init__(self, youtuber_name):
         self.youtuber_name = youtuber_name
-        # Set up the SSL context to connect securely
-        context = ssl.create_default_context(cafile="/path/to/ca_certificate.pem")
-        context.load_cert_chain("/path/to/cert.pem", "/path/to/key.pem")
         # Establish a connection to the remote RabbitMQ server on Google Cloud
         credentials = pika.PlainCredentials('youtuber', 'youtuber23')
         self.connection = pika.BlockingConnection(
             pika.ConnectionParameters(
-                host='34.68.235.110',  # Replace with your Google Cloud VM's public IP address
+                host='10.128.0.2',  # Replace with your Google Cloud VM's public IP address
                 credentials=credentials,
-                ssl_options=pika.SSLOptions(context),
-                port=5671  # Default SSL port for RabbitMQ
             )
         )
         self.channel = self.connection.channel()
