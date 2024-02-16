@@ -87,14 +87,16 @@ class UserClient:
         self.group_socket.send_string(fetch_data)
         response = self.group_socket.recv_string()
 
-        if response.startswith("SUCCESS"):
-            print("Message History:")
-            messages = eval(response.split("SUCCESS ")[1])
-            for message in messages:
-                user_uuid, msg, timestamp = message.split(" ")
-                print(f"User: {user_uuid}, Message: {msg}, Timestamp: {timestamp}")
-        else:
+        if response.startswith("Fail"):
             print("You are not part of this group.")
+
+        else:
+            print("Message History:")
+            print(response)
+            # messages = eval(response.split("SUCCESS "))
+            # for message in messages:
+            #     user_uuid, msg, timestamp = message.split(" ")
+            #     print(f"User: {user_uuid}, Message: {msg}, Timestamp: {timestamp}")
 
     def display_menu(self):
         print("1. Request live groups")
@@ -140,5 +142,6 @@ if __name__ == "__main__":
             user.fetch_messages(group_ip, group_port, timestamp)
         else:
             print("Invalid choice. Please select again.")
+
 
 
