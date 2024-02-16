@@ -33,7 +33,8 @@ class GroupServer:
             identity = multipart_message[0]
             action = multipart_message[1].decode("utf-8")
             message = multipart_message[2].decode("utf-8")
-
+            
+            print(message)
             full_message = f"{action} {message}"
             action_parts = full_message.split()
 
@@ -76,8 +77,8 @@ class GroupServer:
         self.receive_socket.send_multipart([identity, b"", b"SUCCESS"])
         # self.receive_socket.send_string("SUCCESS")
 
-    def store_message(self,identity, message, timestamp):
-        message_data = {"user_uuid": message, "message": message, "timestamp": timestamp}
+    def store_message(self,identity, user_uuid, message, timestamp):
+        message_data = {"user_uuid": user_uuid, "message": message, "timestamp": timestamp}
         self.message_history.append(message_data)
         print("Message history" + str(self.message_history))
         print("Message sent in group.")
