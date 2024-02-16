@@ -9,8 +9,8 @@ from concurrent import futures
 import socket
 import time
 
-SERVER_IP = 'localhost'
-SERVER_PORT = os.getenv('SELLER_PORT', '8003')
+SERVER_IP = '10.128.0.5'
+SERVER_PORT = os.getenv('BUYER_PORT', '8003')
 
 class BuyerClient:
     def __init__(self, server_address):
@@ -231,7 +231,7 @@ class BuyerClient:
         response = self.market_stub.NotificationBuyerAddress(request)
         if response.success:
             print("Notification address set successfully")
-            print("Address:{address}")
+            print(f"Address:{self.notification_address}")
             self.start_receiving_notifications()
         else:
             print("Failed to set notification address")
@@ -268,7 +268,7 @@ class NotifyService(notify_service_pb2_grpc.NotifyServiceServicer):
         return notify_service_pb2_grpc.NotificationResponse(success=True)
 
 def main():
-    server_address = "localhost:50051"  # Adjust to your server's IP and port
+    server_address = "10.128.0.4:50051"  # Adjust to your server's IP and port
     client = BuyerClient(server_address)
 
     while True:

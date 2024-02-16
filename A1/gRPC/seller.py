@@ -9,7 +9,7 @@ import time
 import socket
 from concurrent import futures
 
-SERVER_IP = 'localhost'
+SERVER_IP = '10.128.0.5'
 SERVER_PORT = os.getenv('SELLER_PORT', '8001')
 
 class SellerClient:
@@ -282,7 +282,7 @@ class NotifyService(notify_service_pb2_grpc.NotifyServiceServicer):
 
 
 def main():
-    server_address = "localhost:50051"  # Change this to your server's address
+    server_address = "10.128.0.4:50051"  # Change this to your server's address
     client = SellerClient(server_address)
 
     while True:
