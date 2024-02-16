@@ -36,15 +36,15 @@ Makefile: A Makefile is provided to compile the .proto files into Python code us
 # RabbitMQ
 
 
-YouTube Notification System with RabbitMQ
+## YouTube Notification System with RabbitMQ
 
-Clone the Repository:
+### Clone the Repository:
 git clone <repository_url>
 
-Install Dependencies:
+### Install Dependencies:
 pip install -r requirements.txt
 
-RabbitMQ Installation:
+### RabbitMQ Installation:
 
 Install RabbitMQ on your system or use a cloud-based RabbitMQ service.
 Ensure RabbitMQ is running and accessible.
@@ -56,17 +56,17 @@ The system consists of the following components:
 3. YouTube Server (YouTubeServer.py): Central server responsible for handling user requests, YouTuber uploads, and notification delivery.
 
 
-Run the YouTube Server:
+### Run the YouTube Server:
 python YouTubeServer.py
 
-Users can subscribe or unsubscribe to YouTubers and receive notifications:
+### Users can subscribe or unsubscribe to YouTubers and receive notifications:
 
 python User.py <username> <action> <youtuber_name>
 
-YouTubers can publish videos:
+### YouTubers can publish videos:
 
 python YouTuber.py <youtuber_name> <video_name>
 
-Prerequisites
+### Prerequisites
 Ensure Python and RabbitMQ are installed on your system.
 Make sure RabbitMQ is running and accessible.
