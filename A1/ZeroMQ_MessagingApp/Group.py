@@ -112,4 +112,4 @@ class GroupServer:
 
 if __name__ == "__main__":
     group = GroupServer()
-    group.start("Group1", "localhost", 1234, "localhost", 2000)
+    group.start("Group1", "10.128.0.7", 1234, "10.128.0.6", 2000)

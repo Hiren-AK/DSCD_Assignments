@@ -110,7 +110,7 @@ class UserClient:
 
 if __name__ == "__main__":
     user = UserClient()
-    user.start("localhost", 2000)
+    user.start("10.128.0.6", 2000)
 
     while True:
         choice = user.display_menu()

@@ -62,7 +62,7 @@ class YouTubeServer:
         def callback(ch, method, properties, body):
             request = json.loads(body)
             youtuber_name = request['youtuber']
-            video_name = request['videoName']  # Make sure this matches your message format
+            video_name = request['videoName'] 
 
             # Add YouTuber or video to the youtubers dictionary
             self.youtubers.setdefault(youtuber_name, []).append(video_name)
@@ -104,6 +104,6 @@ if __name__ == "__main__":
     user_thread.start()
     youtuber_thread.start()
 
-    # Wait for the threads to finish (they won't if the server is running correctly)
+    # Wait for the threads to finish
     user_thread.join()
     youtuber_thread.join()

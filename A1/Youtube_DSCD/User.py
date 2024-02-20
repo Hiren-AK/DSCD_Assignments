@@ -1,6 +1,7 @@
 import pika
 import sys
 import json
+import requests
 
 class User:
     def __init__(self, username):
@@ -66,7 +67,14 @@ if __name__ == "__main__":
 
     # Check for action and execute accordingly
     if len(sys.argv) == 4:
-        action = 'subscribe' if sys.argv[2] == 's' else 'unsubscribe'
+        if sys.argv[2]== 's':
+            action = 'subscribe'
+        elif sys.argv[2] == 'u':
+            action = 'unsubscribe'
+        else:
+            print("Invalid action. Use 's' for subscribe or 'u' for unsubscribe.")
+            sys.exit(1)
+
         youtuber = sys.argv[3]
         user.update_subscription(action, youtuber)
 
