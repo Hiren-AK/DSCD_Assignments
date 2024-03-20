@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package raftkv;
+
+// The Raft service definition.
+service Raft {
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse) {}
+  rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse) {}
+}
+
+// The KeyValueStore service for client operations.
+service KeyValueStore {
+  rpc ServeClient (ServeClientArgs) returns (ServeClientReply) {}
+}
+
+// Messages for the Raft service.
+message AppendEntriesRequest {
+  int64 term = 1;
+  int64 leaderId = 2;
+  int64 prevLogIndex = 3;
+  int64 prevLogTerm = 4;
+  repeated LogEntry entries = 5;
+  int64 leaderCommit = 6;
+  int64 leaseDuration = 7; // For leader lease modifications
+}
+
+message AppendEntriesResponse {
+  int64 term = 1;
+  bool success = 2;
+}
+
+message RequestVoteRequest {
+  int64 term = 1;
+  int64 candidateId = 2;
+  int64 lastLogIndex = 3;
+  int64 lastLogTerm = 4;
+  int64 leaseDurationRemaining = 5; // For leader lease modifications
+}
+
+message RequestVoteResponse {
+  int64 term = 1;
+  bool voteGranted = 2;
+  int64 leaseDurationRemaining = 3; // For propagating old leader's lease duration
+}
+
+// Log entry representation.
+message LogEntry {
+  int64 term = 1;
+  string key = 2;
+  string value = 3; // Empty for NO-OP operations
+}
+
+// Messages for the KeyValueStore service.
+message ServeClientArgs {
+  string request = 1; // Expecting a string in format "SET key value" or "GET key"
+}
+
+message ServeClientReply {
+  string data = 1; // The value for GET operations or an acknowledgement for SET operations
+  string leaderID = 2; // The responding node's perception of the current leader's ID
+  bool success = 3; // Indicates if the operation was successful
+}
