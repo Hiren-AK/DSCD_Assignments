@@ -1,6 +1,7 @@
 import os
 import json
-import grpc
+import time
+import grpc.aio as grpc
 import random
 import asyncio
 import raftkv_pb2
@@ -17,7 +18,7 @@ class RaftNode:
     def __init__(self, nodeID, partitions):
         self.node_id = nodeID
         self.partitions = partitions
-        self.state = 2                  # 0 = Leader, 1 = Candidate, 2 = Follower
+        self.state = "follower"                  # follower, candidate, leader
         self.current_term = 0
         self.voted_for = None
         self.log = []                   # List of log entries; each entry is a dictionary
@@ -25,8 +26,9 @@ class RaftNode:
         self.commit_index = 0
         self.election_timeout = random.uniform(5, 10)
         self.heartbeat_interval = 1.0       # 1 second
-        self.lease_expiration_time = 10.0   # 10 second
-        self.lease_on = False
+        self.heartbeat_received = False
+        self.lease_expiration_time = None 
+        self.lease_duration = 5.0          # 5 second
         self.leader_id = None
         self.initialize_storage()
 
@@ -65,15 +67,17 @@ class RaftNode:
                 self.data = json.load(f)
         except FileNotFoundError:
             self.data = {}
+        
+        temp_text = f"Node {self.node_id} started"
+        self.dump_operation(temp_text)
 
-    def dump_operation(self, lines):
+    def dump_operation(self, line):
         try:
             with open(self.dump_file_path, 'a') as f:
-                for line in lines:
-                    # Ensure each line ends with a newline character
-                    if not line.endswith('\n'):
-                        line += '\n'
-                    f.write(line)
+                # Ensure each line ends with a newline character
+                if not line.endswith('\n'):
+                    line += '\n'
+                f.write(line)
         except:
             print("dumping operation ran into some error")
 
@@ -96,18 +100,199 @@ class RaftNode:
         try:
             with open(self.log_file_path, 'w') as log_file:
                 json.dump(self.log, log_file)
+            self.commit_index = len(self.log)-1
         except:
             print("Logs commit unsuccessful")
         try:
             self.save_metadata()
         except:
             print("Metadata commit unsuccessful")
+        
+
+    async def run(self):
+        # Start the election timer
+        print(f"Node {self.node_id} started, election timer started with {self.election_timeout} seconds")
+        asyncio.create_task(self.election_timer())
+        
+        # Additional logic for starting the server, handling RPCs, etc.
+
+    async def become_leader(self):
+        self.state = 'leader'  # Become the leader
+        self.leader_id = self.node_id
+        self.lease_expiration_time = time.time() + self.lease_duration
+        asyncio.create_task(self.lease_timer())
+        print(f"Node {self.node_id} became the leader for term {self.current_term}.")
+        # Start sending heartbeats
+        asyncio.create_task(self.send_heartbeats())
+    
+    async def lease_timer(self):
+        if self.state == 'leader':
+            while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
+                await asyncio.sleep(0.5)  # Check lease status every 0.5 seconds
+            if self.state == 'leader':  # If still the leader but lease expired
+                print(f"Lease expired for leader {self.node_id}. Stepping down.")
+                self.state = 'follower'  # Become a follower
+                self.leader_id = None
+    
+    async def election_timer(self):
+        while True:
+            await asyncio.sleep(self.election_timeout)
+            if not self.heartbeat_received and self.state != 'leader':
+                print(f"Election timeout expired for node {self.node_id}. Starting election.")
+                dump_text = f"Node {self.node_id} election timer timed out, starting election"
+                self.dump_operation(dump_text)
+                self.start_election()
+            self.heartbeat_received = False  # Reset for the next term
+    
+    async def start_election(self):
+        self.state = 'candidate'
+        self.current_term += 1
+        self.voted_for = self.node_id
+        self.heartbeat_received = False  # Reset heartbeat received flag
+        # Election logic: send RequestVote RPCs, handle responses, etc.
+        print(f"Node {self.node_id} starting an election for term {self.current_term}.")
+        votes_received = 1  # Vote for itself
+        # Async method to send out RequestVote RPCs to all nodes and await responses
+        for node_id, address in node_addresses.items():
+            if node_id != self.node_id:
+                response = await self.request_vote(node_id, address)
+                if response.voteGranted:
+                    votes_received += 1
+
+        if votes_received > len(node_addresses) // 2:
+            await self.become_leader()
+
+    async def send_heartbeats(self):
+        while self.state == 'leader' and self.lease_expiration_time:
+            if time.time() >= self.lease_expiration_time:
+                print("Lease expired, stepping down.")
+                temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
+                self.dump_operation(temp_text)
+                self.state = 'follower'
+                break  # Exit the loop if the lease has expired
+            
+            acks_received = 1
+            entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[self.commit_index+1:]]
+            request = raftkv_pb2.AppendEntriesRequest(
+                term=self.current_term,
+                leaderId=int(self.node_id),
+                prevLogIndex=len(self.log)-1 if self.log else 0,
+                prevLogTerm=self.log[-1]['term'] if self.log else 0,
+                entries=entries,
+                leaderCommit=self.commit_index,
+                leaseDuration=self.lease_duration  # Fixed lease duration
+            )
+            
+            for node_id, address in node_addresses.items():
+                if node_id == self.node_id:
+                    continue  # Skip self
+                response = await self.send_append_entries(node_id, address, request)
+                if response and response.success:
+                    acks_received += 1
+            
+            # Renew lease if received majority acks
+            if acks_received >= (len(node_addresses) // 2):
+                self.commit()
+                if self.lease_expiration_time and time.time() + 2 >= self.lease_expiration_time:
+                    self.lease_expiration_time = time.time() + self.lease_duration
+                    print("Lease renewed.")
+                    temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
+                    self.dump_operation(temp_text)
+                else:
+                    print("Lease renewal failed once")
+            
+            await asyncio.sleep(self.heartbeat_interval)
+
+
+
+    async def AppendEntries(self, request, context):
+        # Check if the term is current
+        if request.term < self.current_term:
+            return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
+        
+        # Reset the election timer on receiving heartbeat/AppendEntries
+        self.heartbeat_received = True
+        self.leader_id = request.leaderId
+
+        # Log consistency check
+        if request.prevLogIndex >= len(self.log) or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
+            return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
+        
+        # Update the log as per entries received
+        # This is simplified; actual implementation should handle log consistency checks
+        if request.entries:
+            self.log.extend([{"term": e.term, "key": e.key, "value": e.value} for e in request.entries])
+            self.commit_index = min(request.leaderCommit, len(self.log) - 1)
+            self.commit()  # Commit changes to persistent storage
+        
+        return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
+    
+    def RequestVote(self, request, context):
+        if request.term < self.current_term:
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False)
+
+        # Update current term and reset votedFor if term is outdated
+        if request.term > self.current_term:
+            self.current_term = request.term
+            self.voted_for = None
+            self.state = "follower"
+
+        if (self.voted_for is None or self.voted_for == request.candidateId) and self.is_log_up_to_date(request.lastLogIndex, request.lastLogTerm):
+            self.voted_for = request.candidateId
+            self.save_metadata()
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=True)
+        else:
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False)
+    
+    async def replicate_log_entries(self):
+        # This method should be called whenever there's a new entry to replicate or periodically as a heartbeat
+        entries_to_replicate = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[self.commit_index+1:]]
+        acks_received = 1
+        append_entries_request = raftkv_pb2.AppendEntriesRequest(
+            term=self.current_term,
+            leaderId=int(self.node_id),
+            prevLogIndex=self.get_last_log_index(),
+            prevLogTerm=self.get_last_log_term(),
+            entries=entries_to_replicate,
+            leaderCommit=self.commit_index,
+            leaseDuration=self.lease_duration  # Assuming this is the lease duration being sent
+        )
+
+        # Send AppendEntries RPC to all followers asynchronously
+        for node_id, address in self.node_addresses.items():
+            if node_id != self.node_id:  # Exclude self
+                response = await self.send_append_entries(node_id, address, append_entries_request)
+                if response and response.success:
+                    acks_received += 1
+
+        # After receiving acks from a majority, commit the entries and update self.data accordingly
+        # This part depends on your mechanism to track acks and determine majority
+
+        
+    
+    def is_log_up_to_date(self, candidate_last_log_index, candidate_last_log_term):
+        # If the log is empty, treat the term and index as 0
+        last_log_index = 0
+        last_log_term = 0
+        if self.log:
+            last_log_index = len(self.log) - 1
+            last_log_term = self.log[-1]['term']
+        
+        # First, compare the term of the last log entry
+        if last_log_term < candidate_last_log_term:
+            return True
+        elif last_log_term > candidate_last_log_term:
+            return False
+        
+        # If the terms are equal, compare the indices of the last log entry
+        return last_log_index <= candidate_last_log_index
+
 
     def ServeClient(self, request, context):
-        if self.state != 0:  # If not the leader (0 is leader, 1 is candidate, 2 is follower)
+        if self.state != 'leader':  
             leader_address = self.node_addresses.get(self.leader_id, "")
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.leader_id, data=leader_address)
-
+        
         # Handle the request if this node is the leader
         operation, key, value = request.request.split(maxsplit=2)
         
@@ -122,31 +307,51 @@ class RaftNode:
         else:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
     
-    def handle_set_operation(self, key, value):
-        # Append the operation to the log
-        entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
-        self.log.append(entry)
-        # Replicate the log entry to followers (not fully implemented here)
-        # Commit the log entry (not fully implemented here)
-        # Update the data store
-        self.data[key] = value
-        self.commit()  # Commit changes to persistent storage
+    async def handle_set_operation(self, key, value):
+        if self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
+            # Only the leader with a valid lease can handle SET operations
+            entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
+            self.log.append(entry)
+
+            await self.replicate_log_entries()
+
+            # Update the data store
+            self.data[key] = value
+            self.commit()  # Commit changes to persistent storage
+            dump_text = f"Node {self.node_id} {self.state} committed the entry {entry} to the state machine"
+            self.dump_operation(dump_text)
+        else:
+            print("Not the leader or lease expired; cannot handle SET operation.")
 
     def handle_get_operation(self, key):
-        # Retrieve the value from the data store
-        return self.data.get(key, "")
+        if self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
+            # Only the leader with a valid lease can handle GET operations with guaranteed consistency
+            return self.data.get(key, "")
+        else:
+            # Follower nodes handling or leader without a valid lease
+            # Depending on consistency requirements, consider redirecting to leader or serving stale data
+            return "Redirect to leader or operation not allowed"
 
     
 async def serve(node_id, node_addresses):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    raft_node = RaftNode(node_id=node_id, node_addresses=node_addresses)
+    raft_node = RaftNode(node_id, node_addresses)
     raftkv_pb2_grpc.add_RaftServicer_to_server(raft_node, server)
     server.add_insecure_port(node_addresses[node_id])
-    server.start()
-    server.wait_for_termination()
+    await server.start()
+    try:
+        await raft_node.run()  # Start the Raft node's tasks
+        await server.wait_for_termination()
+    except KeyboardInterrupt:
+        # Attempt a graceful shutdown
+        tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await server.stop(0)  # Await the server shutdown here
+        print("Server and all tasks have been shut down gracefully.")
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
     node_id = 'node_1'
-    # asyncio.run(serve(node_id, node_addresses))
-    raft_node = RaftNode(node_id, node_addresses)
+    asyncio.run(serve(node_id, node_addresses))
