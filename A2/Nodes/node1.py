@@ -21,14 +21,16 @@ class RaftNode:
         self.state = "follower"                  # follower, candidate, leader
         self.current_term = 0
         self.voted_for = None
+        self.commit_log = []
         self.log = []                   # List of log entries; each entry is a dictionary
         self.data = {}
         self.commit_index = 0
         self.election_timeout = random.uniform(5, 10)
         self.heartbeat_interval = 1.0       # 1 second
         self.heartbeat_received = False
+        self.lease_with_others = 0
         self.lease_expiration_time = None 
-        self.lease_duration = 5.0          # 5 second
+        self.lease_duration = 5.0           # 5 second
         self.leader_id = None
         self.initialize_storage()
 
@@ -107,6 +109,18 @@ class RaftNode:
             self.save_metadata()
         except:
             print("Metadata commit unsuccessful")
+    
+    def get_last_log_index(self):
+        return len(self.log) - 1 if self.log else 0
+
+    def get_last_log_term(self):
+        return self.log[-1]['term'] if self.log else 0
+
+    def calculate_lease_duration_remaining(self):
+        if not self.lease_expiration_time:
+            return 0
+        now = time.time()
+        return max(0, self.lease_expiration_time - now)
         
 
     async def run(self):
@@ -126,7 +140,12 @@ class RaftNode:
         asyncio.create_task(self.send_heartbeats())
     
     async def lease_timer(self):
-        if self.state == 'leader':
+        if self.lease_with_others:
+            await asyncio.sleep(self.lease_with_others)
+        
+        self.lease_with_others = 0
+
+        if self.state == 'leader' and not self.lease_with_other:
             while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
                 await asyncio.sleep(0.5)  # Check lease status every 0.5 seconds
             if self.state == 'leader':  # If still the leader but lease expired
@@ -142,13 +161,14 @@ class RaftNode:
                 dump_text = f"Node {self.node_id} election timer timed out, starting election"
                 self.dump_operation(dump_text)
                 self.start_election()
-            self.heartbeat_received = False  # Reset for the next term
+            self.heartbeat_received = False  # Reset 
     
     async def start_election(self):
         self.state = 'candidate'
         self.current_term += 1
         self.voted_for = self.node_id
         self.heartbeat_received = False  # Reset heartbeat received flag
+        max_lease = 0
         # Election logic: send RequestVote RPCs, handle responses, etc.
         print(f"Node {self.node_id} starting an election for term {self.current_term}.")
         votes_received = 1  # Vote for itself
@@ -158,8 +178,10 @@ class RaftNode:
                 response = await self.request_vote(node_id, address)
                 if response.voteGranted:
                     votes_received += 1
+                    max_lease = max(max_lease, response.leaseDurationRemaining)
 
         if votes_received > len(node_addresses) // 2:
+            self.lease_with_others = max_lease
             await self.become_leader()
 
     async def send_heartbeats(self):
@@ -228,8 +250,11 @@ class RaftNode:
         return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
     
     def RequestVote(self, request, context):
+        # Calculate the remaining lease duration
+        lease_duration_remaining = self.calculate_lease_duration_remaining()
+
         if request.term < self.current_term:
-            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False)
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
 
         # Update current term and reset votedFor if term is outdated
         if request.term > self.current_term:
@@ -240,33 +265,29 @@ class RaftNode:
         if (self.voted_for is None or self.voted_for == request.candidateId) and self.is_log_up_to_date(request.lastLogIndex, request.lastLogTerm):
             self.voted_for = request.candidateId
             self.save_metadata()
-            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=True)
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=True, leaseDurationRemaining=lease_duration_remaining)
         else:
-            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False)
+            return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
     
-    async def replicate_log_entries(self):
-        # This method should be called whenever there's a new entry to replicate or periodically as a heartbeat
-        entries_to_replicate = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[self.commit_index+1:]]
-        acks_received = 1
-        append_entries_request = raftkv_pb2.AppendEntriesRequest(
-            term=self.current_term,
-            leaderId=int(self.node_id),
-            prevLogIndex=self.get_last_log_index(),
-            prevLogTerm=self.get_last_log_term(),
-            entries=entries_to_replicate,
-            leaderCommit=self.commit_index,
-            leaseDuration=self.lease_duration  # Assuming this is the lease duration being sent
-        )
-
-        # Send AppendEntries RPC to all followers asynchronously
-        for node_id, address in self.node_addresses.items():
-            if node_id != self.node_id:  # Exclude self
-                response = await self.send_append_entries(node_id, address, append_entries_request)
-                if response and response.success:
-                    acks_received += 1
-
-        # After receiving acks from a majority, commit the entries and update self.data accordingly
-        # This part depends on your mechanism to track acks and determine majority
+    async def request_vote(self, node_id, address):
+        async with grpc.aio.insecure_channel(address) as channel:
+            stub = raftkv_pb2_grpc.RaftStub(channel)
+            # Construct the RequestVoteRequest message
+            request = raftkv_pb2.RequestVoteRequest(
+                term=self.current_term,
+                candidateId=int(self.node_id),
+                lastLogIndex=self.get_last_log_index(),
+                lastLogTerm=self.get_last_log_term(),
+                leaseDurationRemaining=self.calculate_lease_duration_remaining()
+            )
+            try:
+                # Send the request and await the response
+                response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
+                return response
+            except grpc.aio.AioRpcError as e:
+                print(f"RPC failed to node {node_id}: {e}")
+                # Handle the error appropriately. Perhaps return None or a default response object.
+                return None
 
         
     
