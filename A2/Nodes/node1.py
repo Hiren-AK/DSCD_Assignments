@@ -135,12 +135,17 @@ class RaftNode:
         self.leader_id = self.node_id
         self.lease_expiration_time = time.time() + self.lease_duration
         asyncio.create_task(self.lease_timer())
-        print(f"Node {self.node_id} became the leader for term {self.current_term}.")
+        temp_text = f"Node {self.node_id} became the leader for term {self.current_term}"
+        print(temp_text)
+        self.dump_operation(temp_text)
         # Start sending heartbeats
         asyncio.create_task(self.send_heartbeats())
     
     async def lease_timer(self):
         if self.lease_with_others:
+            temp_text = "New Leader waiting for Old Leader Lease to timeout."
+            print(temp_text)
+            self.dump_operation(temp_text)
             await asyncio.sleep(self.lease_with_others)
         
         self.lease_with_others = 0
@@ -149,16 +154,19 @@ class RaftNode:
             while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
                 await asyncio.sleep(0.5)  # Check lease status every 0.5 seconds
             if self.state == 'leader':  # If still the leader but lease expired
-                print(f"Lease expired for leader {self.node_id}. Stepping down.")
+                temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
+                self.dump_operation(temp_text)
+                print(temp_text)
                 self.state = 'follower'  # Become a follower
+                self.voted_for = None
                 self.leader_id = None
     
     async def election_timer(self):
         while True:
             await asyncio.sleep(self.election_timeout)
             if not self.heartbeat_received and self.state != 'leader':
-                print(f"Election timeout expired for node {self.node_id}. Starting election.")
                 dump_text = f"Node {self.node_id} election timer timed out, starting election"
+                print(dump_text)
                 self.dump_operation(dump_text)
                 self.start_election()
             self.heartbeat_received = False  # Reset 
@@ -169,7 +177,6 @@ class RaftNode:
         self.voted_for = self.node_id
         self.heartbeat_received = False  # Reset heartbeat received flag
         max_lease = 0
-        # Election logic: send RequestVote RPCs, handle responses, etc.
         print(f"Node {self.node_id} starting an election for term {self.current_term}.")
         votes_received = 1  # Vote for itself
         # Async method to send out RequestVote RPCs to all nodes and await responses
@@ -181,16 +188,21 @@ class RaftNode:
                     max_lease = max(max_lease, response.leaseDurationRemaining)
 
         if votes_received > len(node_addresses) // 2:
+            temp_text = f"Node {self.node_id} became the leader for term {self.current_term}."
+            print(temp_text)
+            self.dump_operation(temp_text)
             self.lease_with_others = max_lease
             await self.become_leader()
 
     async def send_heartbeats(self):
         while self.state == 'leader' and self.lease_expiration_time:
             if time.time() >= self.lease_expiration_time:
-                print("Lease expired, stepping down.")
                 temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
+                print(temp_text)
                 self.dump_operation(temp_text)
                 self.state = 'follower'
+                self.voted_for = None
+                self.leader_id = None
                 break  # Exit the loop if the lease has expired
             
             acks_received = 1
