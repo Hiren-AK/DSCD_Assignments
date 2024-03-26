@@ -9,9 +9,9 @@ import raftkv_pb2_grpc
 from concurrent import futures
 
 node_addresses = {
-    'node_1': 'localhost:50051',
-    'node_2': 'localhost:50052',
-    'node_3': 'localhost:50053',
+    '01': 'localhost:50051',
+    '02': 'localhost:50052',
+    '03': 'localhost:50053',
 }
 
 class RaftNode:
@@ -381,5 +381,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = 'node_1'
+    node_id = '01'
     asyncio.run(serve(node_id, node_addresses))
