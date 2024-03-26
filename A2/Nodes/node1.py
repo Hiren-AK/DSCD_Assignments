@@ -9,15 +9,15 @@ import raftkv_pb2_grpc
 from concurrent import futures
 
 node_addresses = {
-    '01': 'localhost:50051',
-    '02': 'localhost:50052',
-    '03': 'localhost:50053',
+    'node_1': 'localhost:50051',
+    'node_2': 'localhost:50052',
+    'node_3': 'localhost:50053',
 }
 
 class RaftNode:
     def __init__(self, nodeID, partitions):
         self.node_id = nodeID
-        self.partitions = partitions
+        self.acks = {}                    # dictionary to save the term returned in ack of every node
         self.state = "follower"                  # follower, candidate, leader
         self.current_term = 0
         self.voted_for = None
@@ -32,6 +32,7 @@ class RaftNode:
         self.lease_expiration_time = None 
         self.lease_duration = 5.0           # 5 second
         self.leader_id = None
+        self.lock = asyncio.Lock()
         self.initialize_storage()
 
     def initialize_storage(self):
@@ -93,22 +94,22 @@ class RaftNode:
         with open(self.metadata_file_path, 'w') as metadata_file:
             json.dump(metadata, metadata_file)
 
-    def commit(self):
-        try:
-            with open(self.data_file_path, 'w') as data_file:
-                json.dump(self.data, data_file)
-        except:
-            print("Data commit unsuccessful")
-        try:
-            with open(self.log_file_path, 'w') as log_file:
-                json.dump(self.log, log_file)
-            self.commit_index = len(self.log)-1
-        except:
-            print("Logs commit unsuccessful")
-        try:
-            self.save_metadata()
-        except:
-            print("Metadata commit unsuccessful")
+    async def save_state(self):
+        async with self.lock:
+            try:
+                with open(self.data_file_path, 'w') as data_file:
+                    json.dump(self.data, data_file)
+            except:
+                print("Data commit unsuccessful")
+            try:
+                with open(self.log_file_path, 'w') as log_file:
+                    json.dump(self.log, log_file)
+            except:
+                print("Logs commit unsuccessful")
+            try:
+                self.save_metadata()
+            except:
+                print("Metadata commit unsuccessful")
     
     def get_last_log_index(self):
         return len(self.log) - 1 if self.log else 0
@@ -122,7 +123,6 @@ class RaftNode:
         now = time.time()
         return max(0, self.lease_expiration_time - now)
         
-
     async def run(self):
         # Start the election timer
         print(f"Node {self.node_id} started, election timer started with {self.election_timeout} seconds")
@@ -195,7 +195,7 @@ class RaftNode:
             await self.become_leader()
 
     async def send_heartbeats(self):
-        while self.state == 'leader' and self.lease_expiration_time:
+        while self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time:
             if time.time() >= self.lease_expiration_time:
                 temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
                 print(temp_text)
@@ -205,39 +205,53 @@ class RaftNode:
                 self.leader_id = None
                 break  # Exit the loop if the lease has expired
             
-            acks_received = 1
-            entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[self.commit_index+1:]]
-            request = raftkv_pb2.AppendEntriesRequest(
-                term=self.current_term,
-                leaderId=int(self.node_id),
-                prevLogIndex=len(self.log)-1 if self.log else 0,
-                prevLogTerm=self.log[-1]['term'] if self.log else 0,
-                entries=entries,
-                leaderCommit=self.commit_index,
-                leaseDuration=self.lease_duration  # Fixed lease duration
-            )
-            
-            for node_id, address in node_addresses.items():
-                if node_id == self.node_id:
-                    continue  # Skip self
-                response = await self.send_append_entries(node_id, address, request)
-                if response and response.success:
-                    acks_received += 1
-            
-            # Renew lease if received majority acks
-            if acks_received >= (len(node_addresses) // 2):
-                self.commit()
-                if self.lease_expiration_time and time.time() + 2 >= self.lease_expiration_time:
-                    self.lease_expiration_time = time.time() + self.lease_duration
-                    print("Lease renewed.")
-                    temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
-                    self.dump_operation(temp_text)
-                else:
-                    print("Lease renewal failed once")
-            
+            async with self.lock:
+                acks_received = 1
+                start_ind = self.commit_index+1
+                end_ind = len(self.log)-1
+                entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[start_ind:]]
+                request = raftkv_pb2.AppendEntriesRequest(
+                    term=self.current_term,
+                    leaderId=self.node_id,
+                    prevLogIndex= self.commit_index if self.log else 0,
+                    prevLogTerm=self.log[self.commit_index]['term'] if self.log else 0,
+                    entries=entries,
+                    leaderCommit=self.commit_index,
+                    leaseDuration=self.lease_duration  # Fixed lease duration
+                )
+
+                """
+                So, now that you have given the enteries, some will acknowledge, some will fail, some will reject, look into all situations.
+                Also, once majority is established, commit new ones (for leader), next heartbeat (followers commit).
+                Next, look into file management using global semaphores/mutexes for committing
+                Lastly, when a client has sent request, check using index if that entry is commited, if yes then success, else wait for 0.5 seconds.
+                """
+                
+                retry_list = []
+
+                for node_id, address in node_addresses.items():
+                    if node_id == self.node_id:
+                        continue  # Skip self
+                    response = await self.send_append_entries(node_id, address, request)
+                    if response and response.success: 
+                        acks_received += 1
+                        self.acks
+                
+                # If majority is achieved, update commit index and commit new entries
+                if acks_received > len(node_addresses) // 2:
+                    new_commit_index = len(self.log) - 1  # Assume all new entries are now committed
+                    if new_commit_index > self.commit_index:
+                        self.commit_index = new_commit_index
+                        self.commit()  # Commit changes to the log and data
+                        if self.lease_expiration_time and time.time() + 2 >= self.lease_expiration_time:
+                            self.lease_expiration_time = time.time() + self.lease_duration
+                            print("Lease renewed.")
+                            temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
+                            self.dump_operation(temp_text)
+                        else:
+                            print("Lease renewal failed once")
+
             await asyncio.sleep(self.heartbeat_interval)
-
-
 
     async def AppendEntries(self, request, context):
         # Check if the term is current
@@ -327,6 +341,11 @@ class RaftNode:
         if operation.upper() == "SET":
             # Logic for handling SET operation
             self.handle_set_operation(key, value)
+
+            #################################################################################################################################
+            # wait for the enteries to get commited in the leader then give success response, else fail
+            #################################################################################################################################
+
             return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data="SET operation successful")
         elif operation.upper() == "GET":
             # Logic for handling GET operation
@@ -381,5 +400,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = '01'
+    node_id = 'node_1'
     asyncio.run(serve(node_id, node_addresses))
