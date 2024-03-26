@@ -300,16 +300,11 @@ class RaftNode:
                 print(f"RPC failed to node {node_id}: {e}")
                 # Handle the error appropriately. Perhaps return None or a default response object.
                 return None
-
-        
     
     def is_log_up_to_date(self, candidate_last_log_index, candidate_last_log_term):
         # If the log is empty, treat the term and index as 0
-        last_log_index = 0
-        last_log_term = 0
-        if self.log:
-            last_log_index = len(self.log) - 1
-            last_log_term = self.log[-1]['term']
+        last_log_index = self.get_last_log_index()
+        last_log_term = self.get_last_log_term()
         
         # First, compare the term of the last log entry
         if last_log_term < candidate_last_log_term:
@@ -341,7 +336,7 @@ class RaftNode:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
     
     async def handle_set_operation(self, key, value):
-        if self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
+        if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Only the leader with a valid lease can handle SET operations
             entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
             self.log.append(entry)
@@ -357,7 +352,7 @@ class RaftNode:
             print("Not the leader or lease expired; cannot handle SET operation.")
 
     def handle_get_operation(self, key):
-        if self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
+        if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Only the leader with a valid lease can handle GET operations with guaranteed consistency
             return self.data.get(key, "")
         else:
