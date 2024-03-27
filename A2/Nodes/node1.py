@@ -1,7 +1,7 @@
 import os
 import json
 import time
-import grpc.aio as grpc
+import grpc.aio
 import random
 import asyncio
 import raftkv_pb2
@@ -150,7 +150,7 @@ class RaftNode:
         
         self.lease_with_others = 0
 
-        if self.state == 'leader' and not self.lease_with_other:
+        if self.state == 'leader' and not self.lease_with_others:
             while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
                 await asyncio.sleep(0.5)  # Check lease status every 0.5 seconds
             if self.state == 'leader':  # If still the leader but lease expired
@@ -168,6 +168,7 @@ class RaftNode:
                 dump_text = f"Node {self.node_id} election timer timed out, starting election"
                 print(dump_text)
                 self.dump_operation(dump_text)
+                await self.start_election()
                 self.start_election()
             self.heartbeat_received = False  # Reset 
     
@@ -176,6 +177,7 @@ class RaftNode:
         self.current_term += 1
         self.voted_for = self.node_id
         self.heartbeat_received = False  # Reset heartbeat received flag
+
         max_lease = 0
         print(f"Node {self.node_id} starting an election for term {self.current_term}.")
         votes_received = 1  # Vote for itself
@@ -183,9 +185,11 @@ class RaftNode:
         for node_id, address in node_addresses.items():
             if node_id != self.node_id:
                 response = await self.request_vote(node_id, address)
-                if response.voteGranted:
+                if response and response.voteGranted:
                     votes_received += 1
                     max_lease = max(max_lease, response.leaseDurationRemaining)
+                else:
+                    print(f"Failed to get vote from node {node_id} for term {self.current_term}.")
 
         if votes_received > len(node_addresses) // 2:
             temp_text = f"Node {self.node_id} became the leader for term {self.current_term}."
@@ -213,10 +217,10 @@ class RaftNode:
                 request = raftkv_pb2.AppendEntriesRequest(
                     term=self.current_term,
                     leaderId=self.node_id,
-                    prevLogIndex= self.commit_index if self.log else 0,
+                    prevLogIndex= int(self.commit_index) if self.log else 0,
                     prevLogTerm=self.log[self.commit_index]['term'] if self.log else 0,
                     entries=entries,
-                    leaderCommit=self.commit_index,
+                    leaderCommit= int(self.commit_index),
                     leaseDuration=self.lease_duration  # Fixed lease duration
                 )
 
@@ -308,7 +312,7 @@ class RaftNode:
             )
             try:
                 # Send the request and await the response
-                response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
+                response = await stub.RequestVote(request, timeout=10)  # Consider a suitable timeout
                 return response
             except grpc.aio.AioRpcError as e:
                 print(f"RPC failed to node {node_id}: {e}")
@@ -381,11 +385,11 @@ class RaftNode:
 
     
 async def serve(node_id, node_addresses):
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
     raft_node = RaftNode(node_id, node_addresses)
     raftkv_pb2_grpc.add_RaftServicer_to_server(raft_node, server)
     server.add_insecure_port(node_addresses[node_id])
-    await server.start()
+    await server.start()  # Remove await here
     try:
         await raft_node.run()  # Start the Raft node's tasks
         await server.wait_for_termination()
@@ -397,6 +401,7 @@ async def serve(node_id, node_addresses):
         await asyncio.gather(*tasks, return_exceptions=True)
         await server.stop(0)  # Await the server shutdown here
         print("Server and all tasks have been shut down gracefully.")
+
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}

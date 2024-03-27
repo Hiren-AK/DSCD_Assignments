@@ -1,0 +1,73 @@
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 6.
+Node 02 became the leader for term 6
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 6.
+Node 02 became the leader for term 6
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 9.
+Node 02 became the leader for term 9
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 12.
+Node 02 became the leader for term 12
+Node 02 election timer timed out, starting election
+Node 02 started
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 17.
+Node 02 became the leader for term 17
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 20.
+Node 02 became the leader for term 20
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 21.
+Node 02 became the leader for term 21

@@ -16,7 +16,7 @@ service KeyValueStore {
 // Messages for the Raft service.
 message AppendEntriesRequest {
   int64 term = 1;
-  int64 leaderId = 2;
+  string leaderId = 2;
   int64 prevLogIndex = 3;
   int64 prevLogTerm = 4;
   repeated LogEntry entries = 5;
@@ -31,7 +31,7 @@ message AppendEntriesResponse {
 
 message RequestVoteRequest {
   int64 term = 1;
-  int64 candidateId = 2;
+  string candidateId = 2;
   int64 lastLogIndex = 3;
   int64 lastLogTerm = 4;
   int64 leaseDurationRemaining = 5; // For leader lease modifications
