@@ -1,1 +1,1 @@
-{"commitLength": 0, "current_term": 21, "voted_for": 2}
+{"commitLength": 0, "current_term": 16, "voted_for": "02"}

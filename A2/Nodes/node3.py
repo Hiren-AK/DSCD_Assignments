@@ -169,7 +169,6 @@ class RaftNode:
                 print(dump_text)
                 self.dump_operation(dump_text)
                 await self.start_election()
-                self.start_election()
             self.heartbeat_received = False  # Reset 
     
     async def start_election(self):
@@ -198,6 +197,18 @@ class RaftNode:
             self.lease_with_others = max_lease
             await self.become_leader()
 
+    async def send_append_entries(self, node_id, address, request):
+
+        async with grpc.aio.insecure_channel(address) as channel:
+            stub = raftkv_pb2_grpc.RaftStub(channel)
+            try:
+                # Sending the AppendEntries RPC to the specified node
+                response = await stub.AppendEntries(request)
+                return True, response  # Return a success status and the response
+            except grpc.aio.AioRpcError as e:
+                print(f"RPC failed to node {node_id}: {e}")
+                return False, None  # Return a failure status and None
+
     async def send_heartbeats(self):
         while self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time:
             if time.time() >= self.lease_expiration_time:
@@ -221,7 +232,7 @@ class RaftNode:
                     prevLogTerm=self.log[self.commit_index]['term'] if self.log else 0,
                     entries=entries,
                     leaderCommit= int(self.commit_index),
-                    leaseDuration=self.lease_duration  # Fixed lease duration
+                    leaseDuration=int(self.lease_duration)  # Fixed lease duration
                 )
 
                 """
@@ -236,8 +247,8 @@ class RaftNode:
                 for node_id, address in node_addresses.items():
                     if node_id == self.node_id:
                         continue  # Skip self
-                    response = await self.send_append_entries(node_id, address, request)
-                    if response and response.success: 
+                    success, response = await self.send_append_entries(node_id, address, request)
+                    if success and response.success: 
                         acks_received += 1
                         self.acks
                 
@@ -280,10 +291,13 @@ class RaftNode:
         return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
     
     def RequestVote(self, request, context):
+        print(f"Node {self.node_id} received vote request from Node {request.candidateId} for term {request.term}.")
+
         # Calculate the remaining lease duration
         lease_duration_remaining = self.calculate_lease_duration_remaining()
 
         if request.term < self.current_term:
+            print(f"Node {self.node_id} denied vote to Node {request.candidateId} because current term {self.current_term} is greater.")
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
 
         # Update current term and reset votedFor if term is outdated
@@ -295,28 +309,37 @@ class RaftNode:
         if (self.voted_for is None or self.voted_for == request.candidateId) and self.is_log_up_to_date(request.lastLogIndex, request.lastLogTerm):
             self.voted_for = request.candidateId
             self.save_metadata()
+            print(f"Node {self.node_id} granted vote to Node {request.candidateId} for term {request.term}.")
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=True, leaseDurationRemaining=lease_duration_remaining)
         else:
+            print(f"Node {self.node_id} denied vote to Node {request.candidateId} for term {request.term}.")
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
+
     
     async def request_vote(self, node_id, address):
         async with grpc.aio.insecure_channel(address) as channel:
             stub = raftkv_pb2_grpc.RaftStub(channel)
-            # Construct the RequestVoteRequest message
             request = raftkv_pb2.RequestVoteRequest(
                 term=self.current_term,
-                candidateId=int(self.node_id),
+                candidateId=(self.node_id),
                 lastLogIndex=self.get_last_log_index(),
                 lastLogTerm=self.get_last_log_term(),
                 leaseDurationRemaining=self.calculate_lease_duration_remaining()
             )
+
             try:
-                # Send the request and await the response
-                response = await stub.RequestVote(request, timeout=10)  # Consider a suitable timeout
+                print(f"Node {self.node_id} sending vote request to Node {node_id} for term {self.current_term}.")
+                response = await stub.RequestVote(request, timeout=5)
+                
+                if response.voteGranted:
+                    print(f"Node {node_id} granted vote to Node {self.node_id} for term {self.current_term}.")
+                else:
+                    print(f"Node {node_id} denied vote to Node {self.node_id} for term {self.current_term}.")
+                
                 return response
             except grpc.aio.AioRpcError as e:
                 print(f"RPC failed to node {node_id}: {e}")
-                # Handle the error appropriately. Perhaps return None or a default response object.
+                print(f"Failed to get vote from node {node_id} for term {self.current_term}.")
                 return None
     
     def is_log_up_to_date(self, candidate_last_log_index, candidate_last_log_term):

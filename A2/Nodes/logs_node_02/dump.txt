@@ -1,73 +1,41 @@
 Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
 Node 02 started
 Node 02 election timer timed out, starting election
-Node 02 started
+Node 02 became the leader for term 7.
+Node 02 became the leader for term 7
+Leader 02 lease renewal failed. Stepping Down.
 Node 02 election timer timed out, starting election
-Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 election timer timed out, starting election
-Node 02 became the leader for term 6.
-Node 02 became the leader for term 6
-Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 became the leader for term 6.
-Node 02 became the leader for term 6
+Node 02 became the leader for term 8.
+Node 02 became the leader for term 8
+Leader 02 lease renewal failed. Stepping Down.
 Node 02 election timer timed out, starting election
 Node 02 became the leader for term 9.
 Node 02 became the leader for term 9
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 10.
+Node 02 became the leader for term 10
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 11.
+Node 02 became the leader for term 11
+Leader 02 lease renewal failed. Stepping Down.
 Node 02 election timer timed out, starting election
 Node 02 became the leader for term 12.
 Node 02 became the leader for term 12
-Node 02 election timer timed out, starting election
-Node 02 started
-Node 02 election timer timed out, starting election
-Node 02 became the leader for term 17.
-Node 02 became the leader for term 17
-Node 02 election timer timed out, starting election
-Node 02 became the leader for term 20.
-Node 02 became the leader for term 20
 Leader 02 lease renewal failed. Stepping Down.
 Node 02 election timer timed out, starting election
-Node 02 became the leader for term 21.
-Node 02 became the leader for term 21
+Node 02 became the leader for term 13.
+Node 02 became the leader for term 13
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 14.
+Node 02 became the leader for term 14
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 15.
+Node 02 became the leader for term 15
+Leader 02 lease renewal failed. Stepping Down.
+Node 02 election timer timed out, starting election
+Node 02 became the leader for term 16.
+Node 02 became the leader for term 16
