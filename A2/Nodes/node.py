@@ -17,8 +17,11 @@ node_addresses = {
 class RaftNode:
     def __init__(self, nodeID, partitions):
         self.node_id = nodeID
-        self.acks = {}                    # dictionary to save the term returned in ack of every node
-        self.state = "follower"                  # follower, candidate, leader
+        self.acks = {}                    # dictionary to save the last index of every node
+        for node_id, address in node_addresses.items():
+            self.acks[node_id] = 0
+
+        self.state = "follower"           # follower, candidate, leader
         self.current_term = 0
         self.voted_for = None
         self.commit_log = []
@@ -58,6 +61,7 @@ class RaftNode:
                 self.current_term = metadata['current_term']
                 self.voted_for = metadata.get('voted_for')  # Might be None if not set
                 self.commit_index = metadata.get('commitLength')
+                self.acks = metadata.get('acks')
         except FileNotFoundError:
             # Initialize metadata if file does not exist
             self.current_term = 0
@@ -73,6 +77,8 @@ class RaftNode:
         
         temp_text = f"Node {self.node_id} started"
         self.dump_operation(temp_text)
+        print(temp_text)
+        self.save_metadata
 
     def dump_operation(self, line):
         try:
@@ -89,7 +95,8 @@ class RaftNode:
         metadata = {
             'commitLength': self.commit_index,
             'current_term': self.current_term,
-            'voted_for': self.voted_for
+            'voted_for': self.voted_for,
+            'acks': self.acks
         }
         with open(self.metadata_file_path, 'w') as metadata_file:
             json.dump(metadata, metadata_file)
@@ -112,10 +119,10 @@ class RaftNode:
                 print("Metadata commit unsuccessful")
     
     def get_last_log_index(self):
-        return len(self.log) - 1 if self.log else 0
+        return len(self.commit_index) if self.log else 0
 
     def get_last_log_term(self):
-        return self.log[-1]['term'] if self.log else 0
+        return self.log[self.commit_index]['term'] if self.log else 0
 
     def calculate_lease_duration_remaining(self):
         if not self.lease_expiration_time:
@@ -213,8 +220,8 @@ class RaftNode:
             request = raftkv_pb2.AppendEntriesRequest(
                 term=self.current_term,
                 leaderId=self.node_id,
-                prevLogIndex= self.commit_index if self.log else 0,
-                prevLogTerm=self.log[self.commit_index]['term'] if self.log else 0,
+                prevLogIndex= self.get_last_log_index,
+                prevLogTerm=self.get_last_log_term,
                 entries=entries,
                 leaderCommit=self.commit_index,
                 leaseDuration=self.lease_duration  # Fixed lease duration
@@ -226,8 +233,6 @@ class RaftNode:
             Next, look into file management using global semaphores/mutexes for committing
             Lastly, when a client has sent request, check using index if that entry is commited, if yes then success, else wait for 0.5 seconds.
             """
-            
-            retry_list = []
 
             for node_id, address in node_addresses.items():
                 if node_id == self.node_id:
@@ -235,24 +240,34 @@ class RaftNode:
                 response = await self.send_append_entries(node_id, address, request)
                 if response and response.success: 
                     acks_received += 1
-                    self.acks[node_id] = response.term
-                elif response:
-                    self.acks[node_id] = response.term
-                    retry_list.append(node_id)
-            
+                    self.acks[node_id] = self.commit_index
+                elif response and not response.success:
+                    if response.term > self.current_term:
+                        self.current_term = request.term
+                        self.voted_for = None
+                        self.state = "follower"
+                        break
+
+                    if self.acks[node_id] > 0:
+                        self.acks[node_id] = self.acks[node_id] - 1
+                    elif self.commit_index > 0:
+                        self.acks[node_id] = self.commit_index - 1
+                    else:
+                        self.acks[node_id] = 0
+
             # If majority is achieved, update commit index and commit new entries
             if acks_received > len(node_addresses) // 2:
                 new_commit_index = end_ind  # Assume all new entries are now committed
                 if new_commit_index > self.commit_index:
                     self.commit_index = new_commit_index
                     self.commit()  # Commit changes to the log and data
-                    if self.lease_expiration_time and time.time() >= self.lease_expiration_time:
+                    if self.lease_expiration_time and time.time() + 2 >= self.lease_expiration_time:
                         self.lease_expiration_time = time.time() + self.lease_duration
                         print("Lease renewed.")
                         temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
                         self.dump_operation(temp_text)
                     else:
-                        print("Lease renewal failed once")
+                        print("Lease renewal failed")
 
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -266,7 +281,7 @@ class RaftNode:
         self.leader_id = request.leaderId
 
         # Log consistency check
-        if request.prevLogIndex >= len(self.log) or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
+        if request.prevLogIndex >= self.get_last_log_index or (request.prevLogIndex >= 0 and self.get_last_log_term != request.prevLogTerm):
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
         
         # Update the log as per entries received
@@ -274,7 +289,8 @@ class RaftNode:
         if request.entries:
             self.log.extend([{"term": e.term, "key": e.key, "value": e.value} for e in request.entries])
             self.commit_index = min(request.leaderCommit, len(self.log) - 1)
-            self.commit()  # Commit changes to persistent storage
+        
+        # Commit changes to persistent storage
         
         return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
     
@@ -299,24 +315,32 @@ class RaftNode:
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
     
     async def request_vote(self, node_id, address):
-        async with grpc.aio.insecure_channel(address) as channel:
-            stub = raftkv_pb2_grpc.RaftStub(channel)
-            # Construct the RequestVoteRequest message
-            request = raftkv_pb2.RequestVoteRequest(
-                term=self.current_term,
-                candidateId=int(self.node_id),
-                lastLogIndex=self.get_last_log_index(),
-                lastLogTerm=self.get_last_log_term(),
-                leaseDurationRemaining=self.calculate_lease_duration_remaining()
-            )
-            try:
-                # Send the request and await the response
-                response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
-                return response
-            except grpc.aio.AioRpcError as e:
-                print(f"RPC failed to node {node_id}: {e}")
-                # Handle the error appropriately. Perhaps return None or a default response object.
-                return None
+        if self.state == 'candidate':
+            async with grpc.aio.insecure_channel(address) as channel:
+                stub = raftkv_pb2_grpc.RaftStub(channel)
+                # Construct the RequestVoteRequest message
+                request = raftkv_pb2.RequestVoteRequest(
+                    term=self.current_term,
+                    candidateId=int(self.node_id),
+                    lastLogIndex=self.get_last_log_index(),
+                    lastLogTerm=self.get_last_log_term(),
+                    leaseDurationRemaining=self.calculate_lease_duration_remaining()
+                )
+                try:
+                    # Send the request and await the response
+                    response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
+                    return response
+                except grpc.aio.AioRpcError as e:
+                    print(f"RPC failed to node {node_id}: {e}")
+                    # Handle the error appropriately. Perhaps return None or a default response object.
+                    return None
+        else:
+            print("Not a candidate, back to follower")
+            self.state = 'follower'
+            self.voted_for = None
+            self.leader_id = None
+            return None
+
     
     def is_log_up_to_date(self, candidate_last_log_index, candidate_last_log_term):
         # If the log is empty, treat the term and index as 0
