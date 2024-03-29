@@ -47,12 +47,20 @@ class RaftNode:
         self.metadata_file_path = os.path.join(directory, "metadata.txt")
         self.dump_file_path = os.path.join(directory, "dump.txt")
         self.data_file_path = os.path.join(directory, "data.txt")
+        self.committed_log_path = os.path.join(directory, "committed.txt")
         # Try to load the log from disk
         try:
             with open(self.log_file_path, 'r') as log_file:
                 self.log = json.load(log_file)
         except FileNotFoundError:
             self.log = []  # Initialize log as empty if file does not exist
+        
+        # Try to load the committed log from disk
+        try:
+            with open(self.committed_log_path, 'r') as commit_file:
+                self.commit_log = json.load(commit_file)
+        except FileNotFoundError:
+            self.commit_log = []  # Initialize log as empty if file does not exist
         
         # Try to load metadata from disk
         try:
@@ -73,8 +81,7 @@ class RaftNode:
             with open(self.data_file_path, 'r') as f:
                 self.data = json.load(f)
         except FileNotFoundError:
-            self.data = {}
-        
+            self.data = {}       
         temp_text = f"Node {self.node_id} started"
         self.dump_operation(temp_text)
         print(temp_text)
@@ -107,16 +114,21 @@ class RaftNode:
                 with open(self.data_file_path, 'w') as data_file:
                     json.dump(self.data, data_file)
             except:
-                print("Data commit unsuccessful")
+                print("Data save unsuccessful")
+            try:
+                with open(self.committed_log_path, 'w') as commit_file:
+                    json.dump(self.commit_log, commit_file)
+            except:
+                print("commit_log save unsuccessful")
             try:
                 with open(self.log_file_path, 'w') as log_file:
                     json.dump(self.log, log_file)
             except:
-                print("Logs commit unsuccessful")
+                print("Logs save unsuccessful")
             try:
                 self.save_metadata()
             except:
-                print("Metadata commit unsuccessful")
+                print("Metadata save unsuccessful")
     
     def get_last_log_index(self):
         return len(self.commit_index) if self.log else 0
@@ -200,6 +212,36 @@ class RaftNode:
             self.dump_operation(temp_text)
             self.lease_with_others = max_lease
             await self.become_leader()
+    
+    def commit_entries(self):
+        # Ensure there are entries to commit
+        if not self.log:
+            return
+
+        # Step 1: Calculate the minimum next_index across all followers
+        # Subtract 1 because next_index points to the next expected entry
+        min_next_index = min(self.acks.values(), default=len(self.log)) - 1
+
+        # Step 2: Determine the highest log index that can be safely committed
+        # (i.e., replicated on a majority of nodes)
+        indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1)
+                                        if self.is_replicated_on_majority(index)]
+
+        if indexes_replicated_majority:
+            # Step 3: Update the commit index to the highest index that meets the criteria
+            self.commit_index = max(indexes_replicated_majority)
+            # Now that commit_index is updated, apply the entries to the state machine and
+            # persist the updated commit_index
+            self.commit_log = self.log[:self.commit_index + 1]
+            self.save_state()
+
+    def is_replicated_on_majority(self, log_index):
+        # Count the number of nodes that have replicated the entry at log_index
+        count_replicated = sum(ack >= log_index + 1 for ack in self.acks.values())  # +1 because acks store next_index
+        # Include the leader in the count
+        count_replicated += 1
+        # Check if the count constitutes a majority
+        return count_replicated > len(node_addresses) // 2
 
     async def send_heartbeats(self):
         while self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time:
@@ -212,64 +254,82 @@ class RaftNode:
                 self.leader_id = None
                 break  # Exit the loop if the lease has expired
             
+            # Reset acks for the current round
+            current_round_acks = {node_id: False for node_id in node_addresses if node_id != self.node_id}
             acks_received = 1
+            
             async with self.lock:
-                start_ind = self.commit_index+1
-                end_ind = len(self.log)-1
-            entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[start_ind:]]
-            request = raftkv_pb2.AppendEntriesRequest(
-                term=self.current_term,
-                leaderId=self.node_id,
-                prevLogIndex= self.get_last_log_index,
-                prevLogTerm=self.get_last_log_term,
-                entries=entries,
-                leaderCommit=self.commit_index,
-                leaseDuration=self.lease_duration  # Fixed lease duration
-            )
+                # Preparing the AppendEntriesRequest for each follower
+                for node_id, address in node_addresses.items():
+                    if node_id == self.node_id:
+                        continue  # Skip sending to self
+
+                    # Determine the next index for each follower; initialize if not present
+                    next_index = self.acks[node_id] if self.acks[node_id] <= len(self.log) - 1 else len(self.log) - 1
+                    prev_log_index = next_index - 1
+                    prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
+                    entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
+
+                    request = raftkv_pb2.AppendEntriesRequest(
+                        term=self.current_term,
+                        leaderId=self.node_id,
+                        prevLogIndex=prev_log_index,
+                        prevLogTerm=prev_log_term,
+                        entries=entries,
+                        leaderCommit=self.commit_index,
+                        leaseDuration=self.lease_duration
+                    )
+
+                    # Send AppendEntries RPC in a non-blocking manner
+                    asyncio.create_task(self.handle_append_entries_response(node_id, address, request, current_round_acks))
+
+            await asyncio.sleep(self.heartbeat_interval)
+
+            # Count acks received
+            acks_received += sum(ack for ack in current_round_acks.values())
+
+            if acks_received > len(node_addresses) // 2:
+                # If majority acks received, commit entries
+                self.commit_enteries()
+
+                # Optionally, renew lease if close to expiration
+                if self.lease_expiration_time and time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
+                    self.lease_expiration_time = time.time() + self.lease_duration
+                    print("Lease renewed.")
+                    temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
+                    self.dump_operation(temp_text)
+                else:
+                    print("Lease renewal failed")
 
             """
             So, now that you have given the enteries, some will acknowledge, some will fail, some will reject, look into all situations.
             Also, once majority is established, commit new ones (for leader), next heartbeat (followers commit).
-            Next, look into file management using global semaphores/mutexes for committing
             Lastly, when a client has sent request, check using index if that entry is commited, if yes then success, else wait for 0.5 seconds.
             """
-
-            for node_id, address in node_addresses.items():
-                if node_id == self.node_id:
-                    continue  # Skip self
-                response = await self.send_append_entries(node_id, address, request)
-                if response and response.success: 
-                    acks_received += 1
-                    self.acks[node_id] = self.commit_index
+    
+    async def handle_append_entries_response(self, node_id, address, request, current_round_acks):
+        async with grpc.aio.insecure_channel(address) as channel:
+            stub = raftkv_pb2_grpc.RaftStub(channel)
+            try:
+                response = await stub.AppendEntries(request, timeout=5)
+                if response and response.success:
+                    # If the AppendEntries RPC was successful, mark this node's ack as True
+                    current_round_acks[node_id] = True
+                    # Update next_index for the follower
+                    self.acks[node_id] = request.prev_log_index + len(request.entries) + 1
                 elif response and not response.success:
                     if response.term > self.current_term:
                         self.current_term = request.term
                         self.voted_for = None
                         self.state = "follower"
-                        break
-
-                    if self.acks[node_id] > 0:
-                        self.acks[node_id] = self.acks[node_id] - 1
-                    elif self.commit_index > 0:
-                        self.acks[node_id] = self.commit_index - 1
                     else:
-                        self.acks[node_id] = 0
+                        # If not successful, decrement next_index for this follower and retry
+                        self.acks[node_id] = max(0, self.acks[node_id] - 1)
 
-            # If majority is achieved, update commit index and commit new entries
-            if acks_received > len(node_addresses) // 2:
-                new_commit_index = end_ind  # Assume all new entries are now committed
-                if new_commit_index > self.commit_index:
-                    self.commit_index = new_commit_index
-                    self.commit()  # Commit changes to the log and data
-                    if self.lease_expiration_time and time.time() + 2 >= self.lease_expiration_time:
-                        self.lease_expiration_time = time.time() + self.lease_duration
-                        print("Lease renewed.")
-                        temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
-                        self.dump_operation(temp_text)
-                    else:
-                        print("Lease renewal failed")
+            except grpc.aio.AioRpcError as e:
+                print(f"RPC failed to node {node_id}: {e}")
+                # Handle the communication failure, e.g., by logging or scheduling a retry
 
-            await asyncio.sleep(self.heartbeat_interval)
 
     async def AppendEntries(self, request, context):
         # Check if the term is current
