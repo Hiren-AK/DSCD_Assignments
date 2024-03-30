@@ -212,6 +212,16 @@ class RaftNode:
             self.dump_operation(temp_text)
             self.lease_with_others = max_lease
             await self.become_leader()
+
+    def apply_committed_entries(self):
+        """Applies committed log entries to the node's state machine."""
+        # Ensure there's a lock to prevent concurrent writes
+        with self.lock:
+            for entry in self.commit_log:
+                if entry['Operation'] == "SET":
+                    self.data[entry['key']] = entry['value']
+                    # Logging for debugging
+                    print(f"Applied operation: SET {entry['key']} = {entry['value']}")
     
     def commit_entries(self):
         if self.state == 'leader':
@@ -233,6 +243,7 @@ class RaftNode:
                 # Now that commit_index is updated, apply the entries to the state machine and
                 # persist the updated commit_index
                 self.commit_log = self.log[:self.commit_index + 1]
+                self.apply_committed_entries()
                 self.save_state()
         else:
             # Ensure there are entries to commit
@@ -464,7 +475,7 @@ class RaftNode:
         return last_log_index <= candidate_last_log_index
 
 
-    def ServeClient(self, request, context):
+    async def ServeClient(self, request, context):
         if self.state != 'leader':  
             leader_address = self.node_addresses.get(self.leader_id, "")
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.leader_id, data=leader_address)
@@ -474,35 +485,44 @@ class RaftNode:
         
         if operation.upper() == "SET":
             # Logic for handling SET operation
-            self.handle_set_operation(key, value)
+            result = await self.handle_set_operation(key, value)
 
-            #################################################################################################################################
-            # wait for the enteries to get commited in the leader then give success response, else fail
-            #################################################################################################################################
-
-            return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data="SET operation successful")
+            return raftkv_pb2.ServeClientReply(success=result["success"], leaderID=self.node_id, data=result["message"])
         elif operation.upper() == "GET":
             # Logic for handling GET operation
             value = self.handle_get_operation(key)
             return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data=value)
         else:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
-    
-    async def handle_set_operation(self, key, value):
+
+    async def handle_set_operation(self, key, value, request_id):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
-            # Only the leader with a valid lease can handle SET operations
-            entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
-            self.log.append(entry)
-
-            await self.replicate_log_entries()
-
-            # Update the data store
-            self.data[key] = value
-            self.commit()  # Commit changes to persistent storage
-            dump_text = f"Node {self.node_id} {self.state} committed the entry {entry} to the state machine"
-            self.dump_operation(dump_text)
+            # Append the new operation to the log
+            new_log_index = len(self.log)  # Get the index where the new entry will be added
+            with self.lock:
+                entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
+                self.log.append(entry)
+            
+            # Wait for the operation to be committed
+            success = await self.wait_for_commit(new_log_index, timeout=5.0)  # Example 5-second timeout
+            
+            if success:
+                return {"success": True, "message": "SET operation successful"}
+            else:
+                return {"success": False, "message": "SET operation failed"}
         else:
             print("Not the leader or lease expired; cannot handle SET operation.")
+            return {"success": False, "message": "Not the leader or lease expired"}
+
+    async def wait_for_commit(self, log_index, timeout):
+        """Waits for a log entry at a given index to be committed."""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.commit_index >= log_index:
+                return True  # The operation has been committed
+            await asyncio.sleep(0.1)  # Wait a bit before checking again
+        return False  # Timeout expired before the operation was committed
+
 
     def handle_get_operation(self, key):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
