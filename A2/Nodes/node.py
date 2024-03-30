@@ -131,10 +131,10 @@ class RaftNode:
                 print("Metadata save unsuccessful")
     
     def get_last_log_index(self):
-        return len(self.commit_index) if self.log else 0
+        return len(self.log) - 1 if self.log else -1
 
     def get_last_log_term(self):
-        return self.log[self.commit_index]['term'] if self.log else 0
+        return self.log[-1]['term'] if self.log else 0
 
     def calculate_lease_duration_remaining(self):
         if not self.lease_expiration_time:
@@ -214,26 +214,34 @@ class RaftNode:
             await self.become_leader()
     
     def commit_entries(self):
-        # Ensure there are entries to commit
-        if not self.log:
-            return
+        if self.state == 'leader':
+            # Ensure there are entries to commit
+            if not self.log:
+                return
+            # Step 1: Calculate the minimum next_index across all followers
+            # Subtract 1 because next_index points to the next expected entry
+            min_next_index = min(self.acks.values(), default=len(self.log)) - 1
 
-        # Step 1: Calculate the minimum next_index across all followers
-        # Subtract 1 because next_index points to the next expected entry
-        min_next_index = min(self.acks.values(), default=len(self.log)) - 1
+            # Step 2: Determine the highest log index that can be safely committed
+            # (i.e., replicated on a majority of nodes)
+            indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1)
+                                            if self.is_replicated_on_majority(index)]
 
-        # Step 2: Determine the highest log index that can be safely committed
-        # (i.e., replicated on a majority of nodes)
-        indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1)
-                                        if self.is_replicated_on_majority(index)]
-
-        if indexes_replicated_majority:
-            # Step 3: Update the commit index to the highest index that meets the criteria
-            self.commit_index = max(indexes_replicated_majority)
-            # Now that commit_index is updated, apply the entries to the state machine and
-            # persist the updated commit_index
+            if indexes_replicated_majority:
+                # Step 3: Update the commit index to the highest index that meets the criteria
+                self.commit_index = max(indexes_replicated_majority)
+                # Now that commit_index is updated, apply the entries to the state machine and
+                # persist the updated commit_index
+                self.commit_log = self.log[:self.commit_index + 1]
+                self.save_state()
+        else:
+            # Ensure there are entries to commit
+            if not self.log:
+                return
+            
             self.commit_log = self.log[:self.commit_index + 1]
             self.save_state()
+            
 
     def is_replicated_on_majority(self, log_index):
         # Count the number of nodes that have replicated the entry at log_index
@@ -345,7 +353,6 @@ class RaftNode:
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
         
         # Update the log as per entries received
-        # This is simplified; actual implementation should handle log consistency checks
         if request.entries:
             self.log.extend([{"term": e.term, "key": e.key, "value": e.value} for e in request.entries])
             self.commit_index = min(request.leaderCommit, len(self.log) - 1)
@@ -353,6 +360,46 @@ class RaftNode:
         # Commit changes to persistent storage
         
         return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
+    
+    async def AppendEntries(self, request, context):
+        with self.lock:
+            # Step 1: Verify the Leader's Term
+            if request.term < self.current_term:
+                return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
+            
+            self.heartbeat_received = True
+            self.leader_id = request.leaderId
+
+            # Step 2 & 3: Log Matching and Conflicting Entries
+            if request.prevLogIndex > self.get_last_log_index or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
+                return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
+            
+            # Find the first index in new entries that doesn't match the follower's log
+            index = 0
+            for i, entry in enumerate(request.entries):
+                log_index = request.prevLogIndex + 1 + i
+                if log_index < len(self.log) and self.log[log_index]['term'] != entry.term:
+                    index = i
+                    break
+                elif log_index >= len(self.log):
+                    index = i
+                    break
+            
+            # Step 4: Append Any New Entries
+            if index < len(request.entries):
+                self.log = self.log[:request.prevLogIndex + 1 + index] + [{"term": e.term, "key": e.key, "value": e.value} for e in request.entries[index:]]
+            
+            # Step 5: Update Commit Index
+            if request.leaderCommit > self.commit_index:
+                self.commit_index = min(request.leaderCommit, len(self.log) - 1)
+                # Apply the committed entries to the state machine and persist them
+                self.commit_entries()
+            
+            self.save_metadata()
+            self.save_state()
+
+        return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
+
     
     def RequestVote(self, request, context):
         # Calculate the remaining lease duration
