@@ -206,7 +206,7 @@ class RaftNode:
         for node_id, address in node_addresses.items():
             if node_id != self.node_id:
                 response = await self.request_vote(node_id, address)
-                if response.voteGranted:
+                if response and response.voteGranted:
                     votes_received += 1
                     max_lease = max(max_lease, response.leaseDurationRemaining)
                 elif response.term > self.current_term:
@@ -464,7 +464,8 @@ class RaftNode:
     
     async def request_vote(self, node_id, address):
         if self.state == 'candidate':
-            async with grpc.aio.insecure_channel(address) as channel:
+            #async with grpc.aio.insecure_channel(address) as channel:              ################################################3
+            async with grpc.insecure_channel(address) as channel:
                 stub = raftkv_pb2_grpc.RaftStub(channel)
                 # Construct the RequestVoteRequest message
                 request = raftkv_pb2.RequestVoteRequest(
@@ -478,7 +479,8 @@ class RaftNode:
                     # Send the request and await the response
                     response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
                     return response
-                except grpc.aio.AioRpcError as e:
+                #except grpc.aio.AioRpcError as e:                                 ######################################################
+                except grpc.AioRpcError as e:
                     print(f"RPC failed to node {node_id}: {e}")
                     # Handle the error appropriately. Perhaps return None or a default response object.
                     return None
