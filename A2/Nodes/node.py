@@ -105,8 +105,11 @@ class RaftNode:
             'voted_for': self.voted_for,
             'acks': self.acks
         }
-        with open(self.metadata_file_path, 'w') as metadata_file:
-            json.dump(metadata, metadata_file)
+        try:
+            with open(self.metadata_file_path, 'w') as metadata_file:
+                json.dump(metadata, metadata_file)
+        except:
+            print("save_metadata ran into an issue")
 
     async def save_state(self):
         async with self.lock:
@@ -205,17 +208,22 @@ class RaftNode:
         # Async method to send out RequestVote RPCs to all nodes and await responses
         for node_id, address in node_addresses.items():
             if node_id != self.node_id:
-                response = await self.request_vote(node_id, address)
-                if response and response.voteGranted:
-                    votes_received += 1
-                    max_lease = max(max_lease, response.leaseDurationRemaining)
-                elif response.term > self.current_term:
-                    temp_text = f"{self.node_id} Stepping down"
-                    self.state = 'follower'
-                    self.voted_for = None
-                    self.leader_id = None
-                    votes_received = 0
-                    break 
+                try:
+                    response = await self.request_vote(node_id, address)
+                    if response and response.voteGranted:
+                        votes_received += 1
+                        max_lease = max(max_lease, response.leaseDurationRemaining)
+                    elif response and response.term > self.current_term:
+                        temp_text = f"{self.node_id} Stepping down"
+                        self.state = 'follower'
+                        self.voted_for = None
+                        self.leader_id = None
+                        votes_received = 0
+                        break 
+                except grpc.AioRpcError as e:
+                    temp_text = f"Error occurred while sending RPC to Node {node_id}."
+                    print(temp_text)
+                    self.dump_operation(temp_text)
 
         if votes_received > len(node_addresses) // 2:
             temp_text = f"Node {self.node_id} became the leader for term {self.current_term}."
@@ -322,8 +330,11 @@ class RaftNode:
                         leaseDuration=lease_renew
                     )
 
-                    # Send AppendEntries RPC in a non-blocking manner
-                    asyncio.create_task(self.handle_append_entries_response(node_id, address, request, current_round_acks))
+                    try:
+                        # Send AppendEntries RPC in a non-blocking manner
+                        asyncio.create_task(self.handle_append_entries_response(node_id, address, request, current_round_acks))
+                    except:
+                        print("Ran into some issue while sending heartbeats asynchronously")
 
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -481,8 +492,9 @@ class RaftNode:
                     return response
                 #except grpc.aio.AioRpcError as e:                                 ######################################################
                 except grpc.AioRpcError as e:
-                    print(f"RPC failed to node {node_id}: {e}")
-                    # Handle the error appropriately. Perhaps return None or a default response object.
+                    temp_text = f"Error occurred while sending RPC to Node {node_id}."
+                    print(temp_text)
+                    self.dump_operation(temp_text)
                     return None
         else:
             print("Not a candidate, back to follower")
@@ -520,7 +532,10 @@ class RaftNode:
         
         if operation.upper() == "SET":
             # Logic for handling SET operation
-            result = await self.handle_set_operation(key, value)
+            try:
+                result = await self.handle_set_operation(key, value)
+            except:
+                print("Ran into an issue in ServeClient")
 
             return raftkv_pb2.ServeClientReply(success=result["success"], leaderID=self.node_id, data=result["message"])
         elif operation.upper() == "GET":
