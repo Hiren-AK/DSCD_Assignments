@@ -523,11 +523,11 @@ class RaftNode:
         else:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
 
-    async def handle_set_operation(self, key, value, request_id):
+    async def handle_set_operation(self, key, value):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Append the new operation to the log
             new_log_index = len(self.log)  # Get the index where the new entry will be added
-            with self.lock:
+            async with self.lock:
                 entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
                 self.log.append(entry)
             
@@ -583,5 +583,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = '01'
+    node_id = 'node_1'
     asyncio.run(serve(node_id, node_addresses))
