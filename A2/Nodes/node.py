@@ -15,12 +15,12 @@ node_addresses = {
 }
 
 class RaftNode:
-    def __init__(self, nodeID):
+    def __init__(self, nodeID, node_addresses):
         self.node_id = nodeID
         self.acks = {}                    # dictionary to save the last index of every node
         for node_id, address in node_addresses.items():
             self.acks[node_id] = 0
-
+        self.node_addresses = node_addresses
         self.state = "follower"           # follower, candidate, leader
         self.current_term = 0
         self.voted_for = None
