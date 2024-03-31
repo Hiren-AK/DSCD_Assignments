@@ -251,13 +251,13 @@ class RaftNode:
                     # Logging for debugging
                     print(f"Applied operation: SET {entry['key']} = {entry['value']}")
     
-    def commit_entries(self):
+    async def commit_entries(self):
         if self.state == 'leader':
             # Ensure there are entries to commit
             if not self.log:
                 return
             
-            with self.lock:
+            async with self.lock:
                 # Step 1: Calculate the minimum next_index across all followers
                 # Subtract 1 because next_index points to the next expected entry
                 min_next_index = min(self.acks.values(), default=len(self.log)) - 1
@@ -367,32 +367,23 @@ class RaftNode:
             await asyncio.sleep(self.heartbeat_interval)
     
     async def AppendEntries(self, request, context):
-        print("check 1")
         # Step 1: Verify the Leader's Term
         if request.term < self.current_term:
-            print("check 2")
             temp_text = f"Node {self.node_id} rejected AppendEntries RPC from {request.leaderId}."
             self.dump_operation(temp_text)
             print(temp_text)
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
         
-        print("check 3") 
         self.heartbeat_received = True
         self.leader_id = request.leaderId
         self.lease_with_others = time.time() + self.lease_duration
-        print("check 4")
 
         # Step 2 & 3: Log Matching and Conflicting Entries
         if request.prevLogIndex > self.get_last_log_index():
-            print("check 5")
             temp_text = f"Node {self.node_id} rejected AppendEntries RPC from {request.leaderId}."
             self.dump_operation(temp_text)
             print(temp_text)
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
-        else:
-            print("check 7")
-        
-        print("check 6")
         
         # Find the first index in new entries that doesn't match the follower's log
         index = 0
