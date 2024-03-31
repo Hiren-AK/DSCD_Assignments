@@ -85,7 +85,7 @@ class RaftNode:
         temp_text = f"Node {self.node_id} started"
         self.dump_operation(temp_text)
         print(temp_text)
-        self.save_metadata
+        self.save_metadata()
 
     def dump_operation(self, line):
         try:
@@ -165,11 +165,12 @@ class RaftNode:
             temp_text = "New Leader waiting for Old Leader Lease to timeout."
             print(temp_text)
             self.dump_operation(temp_text)
-            await asyncio.sleep(self.lease_with_others + 2*self.heartbeat_interval)
+            await asyncio.sleep(self.lease_with_others)
             entry = {"term": self.current_term, "Operation": "NO-OP", "key": '', "value": ''}
             self.log.append(entry)
         
         self.lease_with_others = 0
+        await asyncio.sleep(2*self.heartbeat_interval)
 
         if self.state == 'leader' and not self.lease_with_other:
             while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
@@ -306,6 +307,10 @@ class RaftNode:
                     prev_log_index = next_index - 1
                     prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
                     entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
+                    if not self.lease_expiration_time or time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
+                        lease_renew = self.lease_duration
+                    else:
+                        lease_renew = 0
 
                     request = raftkv_pb2.AppendEntriesRequest(
                         term=self.current_term,
@@ -314,7 +319,7 @@ class RaftNode:
                         prevLogTerm=prev_log_term,
                         entries=entries,
                         leaderCommit=self.commit_index,
-                        leaseDuration=self.lease_duration
+                        leaseDuration=lease_renew
                     )
 
                     # Send AppendEntries RPC in a non-blocking manner
@@ -388,6 +393,7 @@ class RaftNode:
             
             self.heartbeat_received = True
             self.leader_id = request.leaderId
+            self.lease_with_others = time.time() + self.lease_duration
             
             # Find the first index in new entries that doesn't match the follower's log
             index = 0
