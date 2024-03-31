@@ -308,7 +308,7 @@ class RaftNode:
 
                 async with grpc.insecure_channel(address) as channel:
                     stub = raftkv_pb2_grpc.RaftStub(channel)
-                    next_index = self.acks[node_id] if (self.acks[node_id] <= len(self.log) - 1 or self.acks[node_id] == 0) else len(self.log) - 1
+                    next_index = self.acks[node_id] if (self.acks[node_id] == 0 or self.acks[node_id] <= len(self.log) - 1) else len(self.log) - 1
                     prev_log_index = next_index - 1
                     prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
                     entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
@@ -527,9 +527,8 @@ class RaftNode:
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Append the new operation to the log
             new_log_index = len(self.log)  # Get the index where the new entry will be added
-            async with self.lock:
-                entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
-                self.log.append(entry)
+            entry = {"term": self.current_term, "Operation": "SET", "key": key, "value": value}
+            self.log.append(entry)
             
             # Wait for the operation to be committed
             success = await self.wait_for_commit(new_log_index, timeout=5.0)  # Example 5-second timeout
@@ -548,7 +547,7 @@ class RaftNode:
         while time.time() - start_time < timeout:
             if self.commit_index >= log_index:
                 return True  # The operation has been committed
-            await asyncio.sleep(0.1)  # Wait a bit before checking again
+            await asyncio.sleep(0.1*timeout)  # Wait a bit before checking again
         return False  # Timeout expired before the operation was committed
 
 
@@ -583,5 +582,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = 'node_1'
+    node_id = '01'
     asyncio.run(serve(node_id, node_addresses))

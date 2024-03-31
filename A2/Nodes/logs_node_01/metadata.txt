@@ -1,1 +1,0 @@
-{"commitLength": 0, "current_term": 15, "voted_for": "02"}
