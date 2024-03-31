@@ -175,7 +175,7 @@ class RaftNode:
         self.lease_with_others = 0
         await asyncio.sleep(2*self.heartbeat_interval)
 
-        if self.state == 'leader' and not self.lease_with_other:
+        if self.state == 'leader' and not self.lease_with_others:
             while self.state == 'leader' and self.lease_expiration_time and time.time() < self.lease_expiration_time:
                 await asyncio.sleep(0.5)  # Check lease status every 0.5 seconds
             if self.state == 'leader':  # If still the leader but lease expired
@@ -361,7 +361,7 @@ class RaftNode:
             """
     
     async def handle_append_entries_response(self, node_id, address, request, current_round_acks):
-        async with grpc.aio.insecure_channel(address) as channel:
+        async with grpc.insecure_channel(address) as channel:
             stub = raftkv_pb2_grpc.RaftStub(channel)
             try:
                 response = await stub.AppendEntries(request, timeout=5)
@@ -379,8 +379,8 @@ class RaftNode:
                         # If not successful, decrement next_index for this follower and retry
                         self.acks[node_id] = max(0, self.acks[node_id] - 1)
 
-            except grpc.aio.AioRpcError as e:
-                print(f"RPC failed to node {node_id}: {e}")
+            except grpc.AioRpcError as e:
+                print(f"RPC failed to node {node_id}")
                 temp_text = f"Error occurred while sending RPC to Node {node_id}."
                 self.dump_operation(temp_text)
                 print(temp_text)
@@ -604,5 +604,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = 'node_1'
+    node_id = '01'
     asyncio.run(serve(node_id, node_addresses))
