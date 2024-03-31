@@ -15,7 +15,7 @@ node_addresses = {
 }
 
 class RaftNode:
-    def __init__(self, nodeID, partitions):
+    def __init__(self, nodeID):
         self.node_id = nodeID
         self.acks = {}                    # dictionary to save the last index of every node
         for node_id, address in node_addresses.items():
@@ -161,7 +161,7 @@ class RaftNode:
         asyncio.create_task(self.send_heartbeats())
     
     async def lease_timer(self):
-        if self.lease_with_others:
+        if self.state == 'leader' and self.lease_with_others:
             temp_text = "New Leader waiting for Old Leader Lease to timeout."
             print(temp_text)
             self.dump_operation(temp_text)
@@ -197,6 +197,7 @@ class RaftNode:
         self.heartbeat_received = False  # Reset heartbeat received flag
         max_lease = 0
         print(f"Node {self.node_id} starting an election for term {self.current_term}.")
+
         votes_received = 1  # Vote for itself
         # Async method to send out RequestVote RPCs to all nodes and await responses
         for node_id, address in node_addresses.items():
@@ -219,6 +220,13 @@ class RaftNode:
         with self.lock:
             for entry in self.commit_log:
                 if entry['Operation'] == "SET":
+                    if self.state == 'leader':
+                        temp_text = f"Node {self.node_id} (leader) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+                    else:
+                        temp_text = f"Node {self.node_id} (follower) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+
+                    self.dump_operation(temp_text)
+                    print(temp_text)
                     self.data[entry['key']] = entry['value']
                     # Logging for debugging
                     print(f"Applied operation: SET {entry['key']} = {entry['value']}")
@@ -228,30 +236,31 @@ class RaftNode:
             # Ensure there are entries to commit
             if not self.log:
                 return
-            # Step 1: Calculate the minimum next_index across all followers
-            # Subtract 1 because next_index points to the next expected entry
-            min_next_index = min(self.acks.values(), default=len(self.log)) - 1
+            
+            with self.lock:
+                # Step 1: Calculate the minimum next_index across all followers
+                # Subtract 1 because next_index points to the next expected entry
+                min_next_index = min(self.acks.values(), default=len(self.log)) - 1
 
-            # Step 2: Determine the highest log index that can be safely committed
-            # (i.e., replicated on a majority of nodes)
-            indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1)
-                                            if self.is_replicated_on_majority(index)]
+                # Step 2: Determine the highest log index that can be safely committed
+                # (i.e., replicated on a majority of nodes)
+                indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1) if self.is_replicated_on_majority(index)]
 
-            if indexes_replicated_majority:
-                # Step 3: Update the commit index to the highest index that meets the criteria
-                self.commit_index = max(indexes_replicated_majority)
-                # Now that commit_index is updated, apply the entries to the state machine and
-                # persist the updated commit_index
-                self.commit_log = self.log[:self.commit_index + 1]
-                self.apply_committed_entries()
-                self.save_state()
+                if indexes_replicated_majority:
+                    # Step 3: Update the commit index to the highest index that meets the criteria
+                    self.commit_index = max(indexes_replicated_majority)
+                    # Now that commit_index is updated, apply the entries to the state machine and
+                    # persist the updated commit_index
+                    self.commit_log = self.log[:self.commit_index + 1]
+                    self.apply_committed_entries()
+                    self.save_state()
         else:
             # Ensure there are entries to commit
             if not self.log:
                 return
-            
-            self.commit_log = self.log[:self.commit_index + 1]
-            self.save_state()
+            with self.lock:
+                self.commit_log = self.log[:self.commit_index + 1]
+                self.save_state()
             
 
     def is_replicated_on_majority(self, log_index):
@@ -347,43 +356,29 @@ class RaftNode:
 
             except grpc.aio.AioRpcError as e:
                 print(f"RPC failed to node {node_id}: {e}")
+                temp_text = f"Error occurred while sending RPC to Node {node_id}."
+                self.dump_operation(temp_text)
+                print(temp_text)
                 # Handle the communication failure, e.g., by logging or scheduling a retry
-
-
-    async def AppendEntries(self, request, context):
-        # Check if the term is current
-        if request.term < self.current_term:
-            return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
-        
-        # Reset the election timer on receiving heartbeat/AppendEntries
-        self.heartbeat_received = True
-        self.leader_id = request.leaderId
-
-        # Log consistency check
-        if request.prevLogIndex >= self.get_last_log_index or (request.prevLogIndex >= 0 and self.get_last_log_term != request.prevLogTerm):
-            return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
-        
-        # Update the log as per entries received
-        if request.entries:
-            self.log.extend([{"term": e.term, "key": e.key, "value": e.value} for e in request.entries])
-            self.commit_index = min(request.leaderCommit, len(self.log) - 1)
-        
-        # Commit changes to persistent storage
-        
-        return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
     
     async def AppendEntries(self, request, context):
         with self.lock:
             # Step 1: Verify the Leader's Term
             if request.term < self.current_term:
+                temp_text = f"Node {self.node_id} rejected AppendEntries RPC from {request.leaderId}."
+                self.dump_operation(temp_text)
+                print(temp_text)
+                return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
+
+            # Step 2 & 3: Log Matching and Conflicting Entries
+            if request.prevLogIndex > self.get_last_log_index or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
+                temp_text = f"Node {self.node_id} rejected AppendEntries RPC from {request.leaderId}."
+                self.dump_operation(temp_text)
+                print(temp_text)
                 return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
             
             self.heartbeat_received = True
             self.leader_id = request.leaderId
-
-            # Step 2 & 3: Log Matching and Conflicting Entries
-            if request.prevLogIndex > self.get_last_log_index or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
-                return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
             
             # Find the first index in new entries that doesn't match the follower's log
             index = 0
@@ -406,6 +401,9 @@ class RaftNode:
                 # Apply the committed entries to the state machine and persist them
                 self.commit_entries()
             
+            temp_text = f"Node {self.node_id} accepted AppendEntries RPC from {self.leader_id}."
+            self.dump_operation(temp_text)
+            print(temp_text)
             self.save_metadata()
             self.save_state()
 
@@ -417,6 +415,9 @@ class RaftNode:
         lease_duration_remaining = self.calculate_lease_duration_remaining()
 
         if request.term < self.current_term:
+            temp_text = f"Vote denied  for Node {request.candidateId} in term {request.term}."
+            self.dump_operation(temp_text)
+            print(temp_text)
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
 
         # Update current term and reset votedFor if term is outdated
@@ -426,10 +427,16 @@ class RaftNode:
             self.state = "follower"
 
         if (self.voted_for is None or self.voted_for == request.candidateId) and self.is_log_up_to_date(request.lastLogIndex, request.lastLogTerm):
+            temp_text = f"Vote granted for Node {request.candidateId} in term {request.term}."
+            self.dump_operation(temp_text)
+            print(temp_text)
             self.voted_for = request.candidateId
             self.save_metadata()
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=True, leaseDurationRemaining=lease_duration_remaining)
         else:
+            temp_text = f"Vote denied  for Node {request.candidateId} in term {request.term}."
+            self.dump_operation(temp_text)
+            print(temp_text)
             return raftkv_pb2.RequestVoteResponse(term=self.current_term, voteGranted=False, leaseDurationRemaining=lease_duration_remaining)
     
     async def request_vote(self, node_id, address):
@@ -482,6 +489,9 @@ class RaftNode:
         
         # Handle the request if this node is the leader
         operation, key, value = request.request.split(maxsplit=2)
+        temp_text = f"Node {self.node_id} (leader) received an {operation} {key} {value} request."
+        self.dump_operation(temp_text)
+        print(temp_text)
         
         if operation.upper() == "SET":
             # Logic for handling SET operation
