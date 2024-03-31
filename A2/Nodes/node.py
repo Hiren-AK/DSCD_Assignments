@@ -27,7 +27,7 @@ class RaftNode:
         self.commit_log = []
         self.log = []                   # List of log entries; each entry is a dictionary
         self.data = {}
-        self.commit_index = 0
+        self.commit_index = -1
         self.election_timeout = random.uniform(5, 10)
         self.heartbeat_interval = 1.0       # 1 second
         self.heartbeat_received = False
@@ -165,7 +165,9 @@ class RaftNode:
             temp_text = "New Leader waiting for Old Leader Lease to timeout."
             print(temp_text)
             self.dump_operation(temp_text)
-            await asyncio.sleep(self.lease_with_others)
+            await asyncio.sleep(self.lease_with_others + 2*self.heartbeat_interval)
+            entry = {"term": self.current_term, "Operation": "NO-OP", "key": '', "value": ''}
+            self.log.append(entry)
         
         self.lease_with_others = 0
 
@@ -206,6 +208,13 @@ class RaftNode:
                 if response.voteGranted:
                     votes_received += 1
                     max_lease = max(max_lease, response.leaseDurationRemaining)
+                elif response.term > self.current_term:
+                    temp_text = f"{self.node_id} Stepping down"
+                    self.state = 'follower'
+                    self.voted_for = None
+                    self.leader_id = None
+                    votes_received = 0
+                    break 
 
         if votes_received > len(node_addresses) // 2:
             temp_text = f"Node {self.node_id} became the leader for term {self.current_term}."
@@ -393,7 +402,15 @@ class RaftNode:
             
             # Step 4: Append Any New Entries
             if index < len(request.entries):
-                self.log = self.log[:request.prevLogIndex + 1 + index] + [{"term": e.term, "key": e.key, "value": e.value} for e in request.entries[index:]]
+                self.log = self.log[:request.prevLogIndex + 1 + index] + [
+                    {
+                        "term": e.term,
+                        "key": e.key,
+                        "value": e.value,
+                        "Operation": "NO-OP" if e.key == "" else "SET"
+                    } for e in request.entries[index:]
+                ]
+
             
             # Step 5: Update Commit Index
             if request.leaderCommit > self.commit_index:
