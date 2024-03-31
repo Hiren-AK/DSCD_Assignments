@@ -9,9 +9,9 @@ import raftkv_pb2_grpc
 from concurrent import futures
 
 node_addresses = {
-    'node_1': 'localhost:50051',
-    'node_2': 'localhost:50052',
-    'node_3': 'localhost:50053',
+    '01': 'localhost:50051',
+    '02': 'localhost:50052',
+    '03': 'localhost:50053',
 }
 
 class RaftNode:
@@ -153,6 +153,8 @@ class RaftNode:
         self.state = 'leader'  # Become the leader
         self.leader_id = self.node_id
         self.lease_expiration_time = time.time() + self.lease_duration
+        entry = {"term": self.current_term, "Operation": "NO-OP", "key": '', "value": ''}
+        self.log.append(entry)
         asyncio.create_task(self.lease_timer())
         temp_text = f"Node {self.node_id} became the leader for term {self.current_term}"
         print(temp_text)
@@ -166,8 +168,6 @@ class RaftNode:
             print(temp_text)
             self.dump_operation(temp_text)
             await asyncio.sleep(self.lease_with_others)
-            entry = {"term": self.current_term, "Operation": "NO-OP", "key": '', "value": ''}
-            self.log.append(entry)
         
         self.lease_with_others = 0
         await asyncio.sleep(2*self.heartbeat_interval)
@@ -190,7 +190,7 @@ class RaftNode:
                 dump_text = f"Node {self.node_id} election timer timed out, starting election"
                 print(dump_text)
                 self.dump_operation(dump_text)
-                self.start_election()
+                await self.start_election()
             self.heartbeat_received = False  # Reset 
     
     async def start_election(self):
@@ -308,7 +308,7 @@ class RaftNode:
                     prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
                     entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
                     if not self.lease_expiration_time or time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
-                        lease_renew = self.lease_duration
+                        lease_renew = int(self.lease_duration)
                     else:
                         lease_renew = 0
 
@@ -469,7 +469,7 @@ class RaftNode:
                 # Construct the RequestVoteRequest message
                 request = raftkv_pb2.RequestVoteRequest(
                     term=self.current_term,
-                    candidateId=int(self.node_id),
+                    candidateId=self.node_id,
                     lastLogIndex=self.get_last_log_index(),
                     lastLogTerm=self.get_last_log_term(),
                     leaseDurationRemaining=self.calculate_lease_duration_remaining()
