@@ -4,9 +4,9 @@ import raftkv_pb2_grpc
 
 # Configuration: IP addresses and ports of all the nodes in the Raft cluster
 node_addresses = {
-    'node_1': 'localhost:50051',
-    'node_2': 'localhost:50052',
-    'node_3': 'localhost:50053',
+    '01': 'localhost:50051',
+    '02': 'localhost:50052',
+    '03': 'localhost:50053',
 }
 
 current_leader_id = None  # Initially, the leader ID is unknown
@@ -42,6 +42,8 @@ def send_request(request):
         response, success = attempt_request_on_node(current_leader_id, request)
         if success:
             return response
+        else:
+            current_leader_id = None
 
     print("Failed to get a successful response from the cluster.")
     return None
@@ -53,7 +55,7 @@ def attempt_request_on_node(node_id, request):
         with get_channel(node_id) as channel:
             stub = raftkv_pb2_grpc.KeyValueStoreStub(channel)
             response = stub.ServeClient(raftkv_pb2.ServeClientArgs(request=request))
-            if response.success:
+            if response and response.success:
                 print(f"Request successful: {response.data}")
                 current_leader_id = response.leaderID  # Update current leader ID based on the response
                 return response, True
@@ -61,7 +63,7 @@ def attempt_request_on_node(node_id, request):
                 print(f"Node {node_id} is not the leader, redirecting to {response.leaderID}.")
                 current_leader_id = response.leaderID  # Update current leader ID for redirection
     except grpc.RpcError as e:
-        print(f"RPCError on node {node_id}: {e}")
+        print(f"RPCError on node {node_id}")
     return None, False
 
 def main():
