@@ -197,8 +197,6 @@ class RaftNode:
             self.heartbeat_received = False  # Reset 
     
     async def start_election(self):
-        if self.state == 'leader':
-            return
         self.state = 'candidate'
         self.current_term += 1
         self.voted_for = self.node_id
@@ -290,69 +288,63 @@ class RaftNode:
         count_replicated += 1
         # Check if the count constitutes a majority
         return count_replicated > len(node_addresses) // 2
-            
+
     async def send_heartbeats(self):
         while self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time:
             if time.time() >= self.lease_expiration_time:
-                print(f"Leader {self.node_id} lease renewal failed. Stepping Down.")
+                temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
+                print(temp_text)
+                self.dump_operation(temp_text)
                 self.state = 'follower'
                 self.voted_for = None
                 self.leader_id = None
                 break  # Exit the loop if the lease has expired
-
+            
+            # Reset acks for the current round
+            current_round_acks = {node_id: False for node_id in node_addresses if node_id != self.node_id}
             acks_received = 1
 
-            for node_id, address in self.node_addresses.items():
+            # Preparing the AppendEntriesRequest for each follower
+            for node_id, address in node_addresses.items():
                 if node_id == self.node_id:
-                    continue  # Skip sending heartbeat to self
+                    continue  # Skip sending to self
 
-                async with grpc.insecure_channel(address) as channel:
-                    stub = raftkv_pb2_grpc.RaftStub(channel)
-                    next_index = self.acks[node_id] if (self.acks[node_id] <= len(self.log) - 1 or self.acks[node_id] == 0) else len(self.log) - 1
-                    prev_log_index = next_index - 1
-                    prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
-                    entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
-                    if not self.lease_expiration_time or time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
-                        lease_renew = int(self.lease_duration)
-                    else:
-                        lease_renew = 0
+                # Determine the next index for each follower; initialize if not present
+                next_index = self.acks[node_id] if (self.acks[node_id] <= len(self.log) - 1 or self.acks[node_id] == 0) else len(self.log) - 1
+                prev_log_index = next_index - 1
+                prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
+                entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
+                if not self.lease_expiration_time or time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
+                    lease_renew = int(self.lease_duration)
+                else:
+                    lease_renew = 0
 
-                    request = raftkv_pb2.AppendEntriesRequest(
-                        term=self.current_term,
-                        leaderId=self.node_id,
-                        prevLogIndex=prev_log_index,
-                        prevLogTerm=prev_log_term,
-                        entries=entries,  # Convert log entries to the required format if necessary
-                        leaderCommit=self.commit_index,
-                        leaseDuration=lease_renew
-                    )
+                request = raftkv_pb2.AppendEntriesRequest(
+                    term=self.current_term,
+                    leaderId=self.node_id,
+                    prevLogIndex=prev_log_index,
+                    prevLogTerm=prev_log_term,
+                    entries=entries,
+                    leaderCommit=self.commit_index,
+                    leaseDuration=lease_renew
+                )
 
-                    try:
-                        response = await stub.AppendEntries(request, timeout=5)
-                        if response and response.success:
-                            # If successful, update next_index for the follower
-                            acks_received += 1
-                            self.acks[node_id] = prev_log_index + len(entries) + 1
-                            print(f"AppendEntries success to {node_id}")
-                        elif response and response.term > self.current_term:
-                            # Handle the case where the follower's term is higher
-                            self.current_term = request.term
-                            self.voted_for = None
-                            self.state = "follower"
-                        else:
-                            # On failure, decrement next_index for the follower and retry later
-                            self.acks[node_id] = max(0, self.acks[node_id] - 1)
-                            print(f"AppendEntries failure to {node_id}, decrementing next_index")
-                    except Exception as e:
-                        temp_text = f"Error occurred while sending RPC/heartbeat to Node {node_id}."
-                        self.dump_operation(temp_text)
-                        print(temp_text)
-                
+                try:
+                    # Send AppendEntries RPC in a non-blocking manner
+                    asyncio.create_task(self.handle_append_entries_response(node_id, address, request, current_round_acks))
+                except:
+                    print("Ran into some issue while sending heartbeats asynchronously")
+
+            await asyncio.sleep(self.heartbeat_interval)        
+
+            # Count acks received
+            acks_received += sum(ack for ack in current_round_acks.values())
             print("acks: ", acks_received)
 
             if acks_received > len(node_addresses) // 2:
                 # If majority acks received, commit entries
                 self.commit_enteries()
+
                 # Optionally, renew lease if close to expiration
                 if self.lease_expiration_time and time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
                     self.lease_expiration_time = time.time() + self.lease_duration
@@ -362,8 +354,37 @@ class RaftNode:
                 else:
                     print("Lease renewal failed")
 
-            # Sleep to ensure heartbeats are sent at regular intervals
-            await asyncio.sleep(self.heartbeat_interval)
+            """
+            So, now that you have given the enteries, some will acknowledge, some will fail, some will reject, look into all situations.
+            Also, once majority is established, commit new ones (for leader), next heartbeat (followers commit).
+            Lastly, when a client has sent request, check using index if that entry is commited, if yes then success, else wait for 0.5 seconds.
+            """
+    
+    async def handle_append_entries_response(self, node_id, address, request, current_round_acks):
+        async with grpc.insecure_channel(address) as channel:
+            stub = raftkv_pb2_grpc.RaftStub(channel)
+            try:
+                response = await stub.AppendEntries(request, timeout=5)
+                if response and response.success:
+                    # If the AppendEntries RPC was successful, mark this node's ack as True
+                    current_round_acks[node_id] = True
+                    # Update next_index for the follower
+                    self.acks[node_id] = request.prev_log_index + len(request.entries) + 1
+                elif response and not response.success:
+                    if response.term > self.current_term:
+                        self.current_term = request.term
+                        self.voted_for = None
+                        self.state = "follower"
+                    else:
+                        # If not successful, decrement next_index for this follower and retry
+                        self.acks[node_id] = max(0, self.acks[node_id] - 1)
+
+            except grpc.AioRpcError as e:
+                print(f"RPC failed to node {node_id}")
+                temp_text = f"Error occurred while sending RPC to Node {node_id}."
+                self.dump_operation(temp_text)
+                print(temp_text)
+                # Handle the communication failure, e.g., by logging or scheduling a retry
     
     async def AppendEntries(self, request, context):
         print("check 1")
@@ -376,21 +397,19 @@ class RaftNode:
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
         
         print("check 3") 
-        self.heartbeat_received = True
-        self.leader_id = request.leaderId
-        self.lease_with_others = time.time() + self.lease_duration
-        print("check 4")
 
         # Step 2 & 3: Log Matching and Conflicting Entries
-        if request.prevLogIndex > self.get_last_log_index or self.log[request.prevLogIndex]['term'] != request.prevLogTerm:
-            print("check 5")
+        if request.prevLogIndex > self.get_last_log_index or (request.prevLogIndex >= 0 and self.log[request.prevLogIndex]['term'] != request.prevLogTerm):
+            print("check 4")
             temp_text = f"Node {self.node_id} rejected AppendEntries RPC from {request.leaderId}."
             self.dump_operation(temp_text)
             print(temp_text)
             return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=False)
-        else:
-            print("check 7")
         
+        print("check 5")
+        self.heartbeat_received = True
+        self.leader_id = request.leaderId
+        self.lease_with_others = time.time() + self.lease_duration
         print("check 6")
         
         # Find the first index in new entries that doesn't match the follower's log
@@ -463,6 +482,7 @@ class RaftNode:
     
     async def request_vote(self, node_id, address):
         if self.state == 'candidate':
+            #async with grpc.aio.insecure_channel(address) as channel:              ################################################3
             async with grpc.insecure_channel(address) as channel:
                 stub = raftkv_pb2_grpc.RaftStub(channel)
                 # Construct the RequestVoteRequest message
@@ -477,6 +497,7 @@ class RaftNode:
                     # Send the request and await the response
                     response = await stub.RequestVote(request, timeout=5)  # Consider a suitable timeout
                     return response
+                #except grpc.aio.AioRpcError as e:                                 ######################################################
                 except grpc.AioRpcError as e:
                     temp_text = f"Error occurred while sending RPC to Node {node_id}."
                     print(temp_text)
@@ -590,5 +611,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = '01'
+    node_id = 'node_1'
     asyncio.run(serve(node_id, node_addresses))
