@@ -112,26 +112,25 @@ class RaftNode:
             print("save_metadata ran into an issue")
 
     async def save_state(self):
-        async with self.lock:
-            try:
-                with open(self.data_file_path, 'w') as data_file:
-                    json.dump(self.data, data_file)
-            except:
-                print("Data save unsuccessful")
-            try:
-                with open(self.committed_log_path, 'w') as commit_file:
-                    json.dump(self.commit_log, commit_file)
-            except:
-                print("commit_log save unsuccessful")
-            try:
-                with open(self.log_file_path, 'w') as log_file:
-                    json.dump(self.log, log_file)
-            except:
-                print("Logs save unsuccessful")
-            try:
-                self.save_metadata()
-            except:
-                print("Metadata save unsuccessful")
+        try:
+            with open(self.data_file_path, 'w') as data_file:
+                json.dump(self.data, data_file)
+        except:
+            print("Data save unsuccessful")
+        try:
+            with open(self.committed_log_path, 'w') as commit_file:
+                json.dump(self.commit_log, commit_file)
+        except:
+            print("commit_log save unsuccessful")
+        try:
+            with open(self.log_file_path, 'w') as log_file:
+                json.dump(self.log, log_file)
+        except:
+            print("Logs save unsuccessful")
+        try:
+            self.save_metadata()
+        except:
+            print("Metadata save unsuccessful")
     
     def get_last_log_index(self):
         return len(self.log) - 1 if self.log else -1
@@ -237,19 +236,18 @@ class RaftNode:
     def apply_committed_entries(self):
         """Applies committed log entries to the node's state machine."""
         # Ensure there's a lock to prevent concurrent writes
-        with self.lock:
-            for entry in self.commit_log:
-                if entry['Operation'] == "SET":
-                    if self.state == 'leader':
-                        temp_text = f"Node {self.node_id} (leader) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
-                    else:
-                        temp_text = f"Node {self.node_id} (follower) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+        for entry in self.commit_log:
+            if entry['Operation'] == "SET":
+                if self.state == 'leader':
+                    temp_text = f"Node {self.node_id} (leader) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+                else:
+                    temp_text = f"Node {self.node_id} (follower) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
 
-                    self.dump_operation(temp_text)
-                    print(temp_text)
-                    self.data[entry['key']] = entry['value']
-                    # Logging for debugging
-                    print(f"Applied operation: SET {entry['key']} = {entry['value']}")
+                self.dump_operation(temp_text)
+                print(temp_text)
+                self.data[entry['key']] = entry['value']
+                # Logging for debugging
+                print(f"Applied operation: SET {entry['key']} = {entry['value']}")
     
     async def commit_entries(self):
         if self.state == 'leader':
@@ -257,30 +255,28 @@ class RaftNode:
             if not self.log:
                 return
             
-            async with self.lock:
-                # Step 1: Calculate the minimum next_index across all followers
-                # Subtract 1 because next_index points to the next expected entry
-                min_next_index = min(self.acks.values(), default=len(self.log)) - 1
+            # Step 1: Calculate the minimum next_index across all followers
+            # Subtract 1 because next_index points to the next expected entry
+            min_next_index = min(self.acks.values(), default=len(self.log)) - 1
 
-                # Step 2: Determine the highest log index that can be safely committed
-                # (i.e., replicated on a majority of nodes)
-                indexes_replicated_majority = [index for index in range(self.commit_index + 1, min_next_index + 1) if self.is_replicated_on_majority(index)]
+            # Step 2: Determine the highest log index that can be safely committed
+            # (i.e., replicated on a majority of nodes)
+            indexes_replicated_majority = [index for index in range(self.commit_index, min_next_index + 1) if self.is_replicated_on_majority(index)]
 
-                if indexes_replicated_majority:
-                    # Step 3: Update the commit index to the highest index that meets the criteria
-                    self.commit_index = max(indexes_replicated_majority)
-                    # Now that commit_index is updated, apply the entries to the state machine and
-                    # persist the updated commit_index
-                    self.commit_log = self.log[:self.commit_index + 1]
-                    self.apply_committed_entries()
-                    self.save_state()
+            if indexes_replicated_majority:
+                # Step 3: Update the commit index to the highest index that meets the criteria
+                self.commit_index = max(indexes_replicated_majority)
+                # Now that commit_index is updated, apply the entries to the state machine and
+                # persist the updated commit_index
+                self.commit_log = self.log[:self.commit_index + 1]
+                self.apply_committed_entries()
+                await self.save_state()
         else:
             # Ensure there are entries to commit
             if not self.log:
                 return
-            with self.lock:
-                self.commit_log = self.log[:self.commit_index + 1]
-                self.save_state()
+            self.commit_log = self.log[:self.commit_index + 1]
+            await self.save_state()
             
 
     def is_replicated_on_majority(self, log_index):
@@ -308,7 +304,7 @@ class RaftNode:
 
                 async with grpc.insecure_channel(address) as channel:
                     stub = raftkv_pb2_grpc.RaftStub(channel)
-                    next_index = self.acks[node_id] if (self.acks[node_id] == 0 or self.acks[node_id] <= len(self.log) - 1) else len(self.log) - 1
+                    next_index = self.acks[node_id] if self.acks[node_id] <= len(self.log) - 1 else len(self.log) - 1
                     prev_log_index = next_index - 1
                     prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
                     entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
@@ -353,7 +349,7 @@ class RaftNode:
 
             if acks_received > len(node_addresses) // 2:
                 # If majority acks received, commit entries
-                self.commit_entries()
+                await self.commit_entries()
                 # Optionally, renew lease if close to expiration
                 if self.lease_expiration_time and time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
                     self.lease_expiration_time = time.time() + self.lease_duration
@@ -412,13 +408,13 @@ class RaftNode:
         if request.leaderCommit > self.commit_index:
             self.commit_index = min(request.leaderCommit, len(self.log) - 1)
             # Apply the committed entries to the state machine and persist them
-            self.commit_entries()
+            await self.commit_entries()
         
         temp_text = f"Node {self.node_id} accepted AppendEntries RPC from {self.leader_id}."
         self.dump_operation(temp_text)
         print(temp_text)
         self.save_metadata()
-        self.save_state()
+        await self.save_state()
 
         return raftkv_pb2.AppendEntriesResponse(term=self.current_term, success=True)
 
@@ -503,7 +499,11 @@ class RaftNode:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.leader_id, data=leader_address)
         
         # Handle the request if this node is the leader
-        operation, key, value = request.request.split(maxsplit=2)
+        parts = request.request.split(maxsplit=2)
+        operation = parts[0]
+        key = parts[1] if len(parts) > 1 else None
+        value = parts[2] if len(parts) > 2 else None
+
         temp_text = f"Node {self.node_id} (leader) received an {operation} {key} {value} request."
         self.dump_operation(temp_text)
         print(temp_text)
@@ -511,19 +511,20 @@ class RaftNode:
         if operation.upper() == "SET":
             # Logic for handling SET operation
             try:
-                result = await self.handle_set_operation(key, value)
+                result = self.handle_set_operation(key, value)
             except:
                 print("Ran into an issue in ServeClient")
 
             return raftkv_pb2.ServeClientReply(success=result["success"], leaderID=self.node_id, data=result["message"])
         elif operation.upper() == "GET":
             # Logic for handling GET operation
+            print("check2")
             value = self.handle_get_operation(key)
             return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data=value)
         else:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
 
-    async def handle_set_operation(self, key, value):
+    def handle_set_operation(self, key, value):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Append the new operation to the log
             new_log_index = len(self.log)  # Get the index where the new entry will be added
@@ -531,9 +532,10 @@ class RaftNode:
             self.log.append(entry)
             
             # Wait for the operation to be committed
-            success = await self.wait_for_commit(new_log_index, timeout=5.0)  # Example 5-second timeout
+            # success = await self.wait_for_commit(new_log_index, timeout=2)  # Example 5-second timeout
             
-            if success:
+            # if success:
+            if self.commit_index >= new_log_index:
                 return {"success": True, "message": "SET operation successful"}
             else:
                 return {"success": False, "message": "SET operation failed"}
@@ -547,7 +549,7 @@ class RaftNode:
         while time.time() - start_time < timeout:
             if self.commit_index >= log_index:
                 return True  # The operation has been committed
-            await asyncio.sleep(0.1*timeout)  # Wait a bit before checking again
+            await asyncio.sleep(0.01)  # Wait a bit before checking again
         return False  # Timeout expired before the operation was committed
 
 
@@ -582,5 +584,5 @@ async def serve(node_id, node_addresses):
 
 if __name__ == '__main__':
     # Example node_addresses format: {'node_1': 'localhost:50051', 'node_2': 'localhost:50052'}
-    node_id = '01'
+    node_id = 'node_1'
     asyncio.run(serve(node_id, node_addresses))
