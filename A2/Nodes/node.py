@@ -511,20 +511,20 @@ class RaftNode:
         if operation.upper() == "SET":
             # Logic for handling SET operation
             try:
-                result = self.handle_set_operation(key, value)
+                result = await self.handle_set_operation(key, value)
             except:
                 print("Ran into an issue in ServeClient")
 
             return raftkv_pb2.ServeClientReply(success=result["success"], leaderID=self.node_id, data=result["message"])
         elif operation.upper() == "GET":
             # Logic for handling GET operation
-            print("check2")
             value = self.handle_get_operation(key)
+            print("Client GET request response: ", key, ": ", value)
             return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data=value)
         else:
             return raftkv_pb2.ServeClientReply(success=False, leaderID=self.node_id, data="Invalid operation")
 
-    def handle_set_operation(self, key, value):
+    async def handle_set_operation(self, key, value):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Append the new operation to the log
             new_log_index = len(self.log)  # Get the index where the new entry will be added
@@ -532,10 +532,10 @@ class RaftNode:
             self.log.append(entry)
             
             # Wait for the operation to be committed
-            # success = await self.wait_for_commit(new_log_index, timeout=2)  # Example 5-second timeout
+            success = await self.wait_for_commit(new_log_index, timeout=2)  # Example 5-second timeout
+            print(f"Client SET Request: SET {key} {value} appended")
             
-            # if success:
-            if self.commit_index >= new_log_index:
+            if success and self.commit_index >= new_log_index:
                 return {"success": True, "message": "SET operation successful"}
             else:
                 return {"success": False, "message": "SET operation failed"}

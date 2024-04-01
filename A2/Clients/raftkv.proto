@@ -40,7 +40,7 @@ message RequestVoteRequest {
 message RequestVoteResponse {
   int64 term = 1;
   bool voteGranted = 2;
-  int64 leaseDurationRemaining = 3; // For propagating old leader's lease duration
+  float leaseDurationRemaining = 3; // For propagating old leader's lease duration
 }
 
 // Log entry representation.
