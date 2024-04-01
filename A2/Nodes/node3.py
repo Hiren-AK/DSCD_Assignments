@@ -27,6 +27,7 @@ class RaftNode:
         self.commit_log = []
         self.log = []                   # List of log entries; each entry is a dictionary
         self.data = {}
+        self.previous_commit = -1
         self.commit_index = -1
         self.election_timeout = random.uniform(5, 10)
         self.heartbeat_interval = 1.0       # 1 second
@@ -236,28 +237,31 @@ class RaftNode:
     def apply_committed_entries(self):
         """Applies committed log entries to the node's state machine."""
         # Ensure there's a lock to prevent concurrent writes
-        for entry in self.commit_log:
-            if entry['Operation'] == "SET":
-                if self.state == 'leader':
-                    temp_text = f"Node {self.node_id} (leader) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
-                else:
-                    temp_text = f"Node {self.node_id} (follower) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+        if self.previous_commit < self.commit_index:
+            for entry in self.commit_log:
+                if entry['Operation'] == "SET":
+                    if self.state == 'leader':
+                        temp_text = f"Node {self.node_id} (leader) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
+                    else:
+                        temp_text = f"Node {self.node_id} (follower) committed the entry SET {entry['key']} = {entry['value']} to the state machine."
 
-                self.dump_operation(temp_text)
-                print(temp_text)
-                self.data[entry['key']] = entry['value']
-                # Logging for debugging
-                print(f"Applied operation: SET {entry['key']} = {entry['value']}")
+                    self.dump_operation(temp_text)
+                    print(temp_text)
+                    self.data[entry['key']] = entry['value']
+                    # Logging for debugging
+                    print(f"Applied operation: SET {entry['key']} = {entry['value']}")
+            self.previous_commit = self.commit_index
     
     async def commit_entries(self):
-        if self.state == 'leader':
+        if self.state == 'leader': # and self.previous_commit < self.commit_index:
             # Ensure there are entries to commit
             if not self.log:
                 return
             
             # Step 1: Calculate the minimum next_index across all followers
             # Subtract 1 because next_index points to the next expected entry
-            min_next_index = min(self.acks.values(), default=len(self.log)) - 1
+            self.acks[self.node_id] = max(self.acks.values())
+            min_next_index = min(self.acks.values(), default=self.commit_index+1) - 1
 
             # Step 2: Determine the highest log index that can be safely committed
             # (i.e., replicated on a majority of nodes)
@@ -271,11 +275,13 @@ class RaftNode:
                 self.commit_log = self.log[:self.commit_index + 1]
                 self.apply_committed_entries()
                 await self.save_state()
-        else:
+        
+        else: # self.previous_commit < self.commit_index:
             # Ensure there are entries to commit
             if not self.log:
                 return
             self.commit_log = self.log[:self.commit_index + 1]
+            self.apply_committed_entries()
             await self.save_state()
             
 
@@ -308,7 +314,7 @@ class RaftNode:
                     prev_log_index = next_index - 1
                     prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
                     entries = [raftkv_pb2.LogEntry(term=e['term'], key=e['key'], value=e['value']) for e in self.log[next_index:]]
-                    if not self.lease_expiration_time or time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
+                    if not self.lease_expiration_time or time.time() + 3*self.heartbeat_interval >= self.lease_expiration_time:
                         lease_renew = int(self.lease_duration)
                     else:
                         lease_renew = 0
@@ -329,6 +335,7 @@ class RaftNode:
                             # If successful, update next_index for the follower
                             acks_received += 1
                             self.acks[node_id] = prev_log_index + len(entries) + 1
+                            self.acks[self.node_id] = max(self.acks.values())
                             print(f"AppendEntries success to {node_id}")
                         elif response and response.term > self.current_term:
                             # Handle the case where the follower's term is higher
@@ -340,15 +347,11 @@ class RaftNode:
                             self.acks[node_id] = max(0, self.acks[node_id] - 1)
                             print(f"AppendEntries failure to {node_id}, decrementing next_index")
                     except Exception as e:
-                        # temp_text = f"Error occurred while sending RPC/heartbeat to Node {node_id}."
-                        # self.dump_operation(temp_text)
-                        # print(temp_text)
-                        print(e)
-                
-            print("acks: ", acks_received)
+                        temp_text = f"Error occurred while sending RPC/heartbeat to Node {node_id}."
+                        self.dump_operation(temp_text)
+                        print(temp_text)
 
             if acks_received > len(node_addresses) // 2:
-                # If majority acks received, commit entries
                 await self.commit_entries()
                 # Optionally, renew lease if close to expiration
                 if self.lease_expiration_time and time.time() + 2*self.heartbeat_interval >= self.lease_expiration_time:
@@ -356,8 +359,10 @@ class RaftNode:
                     print("Lease renewed.")
                     temp_text = f"Leader {self.node_id} sending heartbeat & Renewing Lease"
                     self.dump_operation(temp_text)
-                else:
-                    print("Lease renewal failed")
+            elif acks_received < len(node_addresses) // 2 and time.time() > self.lease_expiration_time:
+                temp_text = f"Leader {self.node_id} lease renewal failed. Stepping Down."
+                self.dump_operation(temp_text)
+                print(temp_text)
 
             # Sleep to ensure heartbeats are sent at regular intervals
             await asyncio.sleep(self.heartbeat_interval)
@@ -518,7 +523,7 @@ class RaftNode:
             return raftkv_pb2.ServeClientReply(success=result["success"], leaderID=self.node_id, data=result["message"])
         elif operation.upper() == "GET":
             # Logic for handling GET operation
-            value = self.handle_get_operation(key)
+            value = await self.handle_get_operation(key)
             print("Client GET request response: ", key, ": ", value)
             return raftkv_pb2.ServeClientReply(success=True, leaderID=self.node_id, data=value)
         else:
@@ -553,7 +558,7 @@ class RaftNode:
         return False  # Timeout expired before the operation was committed
 
 
-    def handle_get_operation(self, key):
+    async def handle_get_operation(self, key):
         if self.state == 'leader' and not self.lease_with_others and self.lease_expiration_time and time.time() < self.lease_expiration_time:
             # Only the leader with a valid lease can handle GET operations with guaranteed consistency
             return self.data.get(key, "")
