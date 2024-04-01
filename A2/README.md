@@ -27,7 +27,7 @@ pip install grpcio grpcio-tools
 Clone the repository to your local machine and compile the proto files in both Client and Node folders, you can use the below given command in both folders.
 
 ```bash
-protoc -I=. --python_out=. --grpc_python_out=. ./raftkv.proto
+ python3 protoc -I=. --python_out=. --grpc_python_out=. ./raftkv.proto
 ```
 Configuration
 Configure each node and client with the IP addresses and ports of all participating nodes.
