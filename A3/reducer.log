@@ -1,6 +1,0 @@
-2024-04-17 05:17:30,688 - asyncio - DEBUG - Using selector: KqueueSelector
-2024-04-17 05:17:30,688 - grpc._cython.cygrpc - DEBUG - Using AsyncIOEngine.POLLER as I/O engine
-2024-04-17 05:18:02,395 - asyncio - DEBUG - Using selector: KqueueSelector
-2024-04-17 05:18:02,395 - grpc._cython.cygrpc - DEBUG - Using AsyncIOEngine.POLLER as I/O engine
-2024-04-17 05:20:32,540 - asyncio - DEBUG - Using selector: KqueueSelector
-2024-04-17 05:20:32,540 - grpc._cython.cygrpc - DEBUG - Using AsyncIOEngine.POLLER as I/O engine
