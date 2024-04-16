@@ -5,6 +5,7 @@ import numpy as np
 import os
 from mapreduce_pb2 import MapperResponse
 import mapreduce_pb2_grpc
+import time
 
 class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
     def ProcessInput(self, request, context):
