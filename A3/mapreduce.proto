@@ -3,22 +3,23 @@ syntax = "proto3";
 package mapreduce;
 
 service MapperService {
-    rpc ProcessInput(MapperTask) returns (MapperResponse) {}
+    rpc ProcessInput(MapperTask) returns (MapperResponse);
+    rpc SendData(FetchRequest) returns (FetchResponse);  // Simplified the naming, removed redundancy
 }
 
-service ReducerService{
+service ReducerService {
     rpc ProcessIntermediateData(ReducerTask) returns (ReducerResponse);
-    rpc FetchIntermediateData(FetchRequest) returns (FetchResponse) {}
+    rpc FetchData(FetchRequest) returns (FetchResponse);  // Changed name for clarity
 }
 
-// Mapper task details sent by the master
+// Details of a task sent to a Mapper by the Master
 message MapperTask {
     repeated double centroids = 1; // List of centroids
     string input_data_path = 2; // Path to the input data
     int32 task_id = 3; // Task ID
 }
 
-// Response from mappers
+// Response from a Mapper
 message MapperResponse {
     bool success = 1;               // Indicates if the task was successful
     string message = 2;             // Error message or success confirmation
@@ -26,13 +27,13 @@ message MapperResponse {
     int32 task_id = 4;              // Task ID for tracking
 }
 
-// Reducer tasks details sent by the master
+// Details of a task sent to a Reducer by the Master
 message ReducerTask {
     repeated string data_paths = 1; // Paths to data files that need to be processed
     int32 task_id = 2;              // Task ID for tracking
 }
 
-// Response from reducers
+// Response from a Reducer
 message ReducerResponse {
     bool success = 1;               // Indicates if the task was successful
     string message = 2;             // Error message or success confirmation
@@ -40,12 +41,12 @@ message ReducerResponse {
     int32 task_id = 4;              // Task ID for tracking
 }
 
-// Request for fetching data from mappers by reducers
+// Request for fetching data from Mappers by Reducers
 message FetchRequest {
-    repeated string data_paths = 1; // Paths to data files to fetch
+    repeated string keys = 1;  // List of centroid IDs or partition identifiers requested by the Reducer
 }
 
 // Response for fetching data
 message FetchResponse {
-    repeated string data = 1;       // Actual data fetched from mappers
+    map<string, string> data = 1;  // Maps centroid ID to data points in string format
 }

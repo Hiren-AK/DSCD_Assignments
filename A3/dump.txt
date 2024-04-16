@@ -1,0 +1,416 @@
+2024-04-17 05:01:32,267 DEBUG Using selector: KqueueSelector
+2024-04-17 05:01:40,597 INFO Randomly initialized centroids: [[12.630863179096908, 96.83125993903082], [65.92469227195072, 51.192695664924834], [30.93467269277513, 62.34121834917595]]
+2024-04-17 05:01:40,597 DEBUG Using AsyncIOEngine.POLLER as I/O engine
+2024-04-17 05:01:40,603 INFO Starting iteration 1
+2024-04-17 05:01:40,604 INFO Received mapping task.
+2024-04-17 05:01:40,604 INFO Received mapping task.
+2024-04-17 05:01:40,605 INFO Received mapping task.
+2024-04-17 05:01:40,612 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,612 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,613 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,613 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,613 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,613 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,613 INFO Starting iteration 2
+2024-04-17 05:01:40,614 INFO Received mapping task.
+2024-04-17 05:01:40,614 INFO Received mapping task.
+2024-04-17 05:01:40,614 INFO Received mapping task.
+2024-04-17 05:01:40,616 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,617 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,617 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,617 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,617 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,617 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,617 INFO Starting iteration 3
+2024-04-17 05:01:40,618 INFO Received mapping task.
+2024-04-17 05:01:40,618 INFO Received mapping task.
+2024-04-17 05:01:40,618 INFO Received mapping task.
+2024-04-17 05:01:40,621 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,621 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,621 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,621 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,621 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,621 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,621 INFO Starting iteration 4
+2024-04-17 05:01:40,622 INFO Received mapping task.
+2024-04-17 05:01:40,622 INFO Received mapping task.
+2024-04-17 05:01:40,622 INFO Received mapping task.
+2024-04-17 05:01:40,624 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,624 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,625 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,625 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,625 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,625 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,625 INFO Starting iteration 5
+2024-04-17 05:01:40,626 INFO Received mapping task.
+2024-04-17 05:01:40,626 INFO Received mapping task.
+2024-04-17 05:01:40,626 INFO Received mapping task.
+2024-04-17 05:01:40,629 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,629 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,629 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,629 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,629 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,629 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,629 INFO Starting iteration 6
+2024-04-17 05:01:40,629 INFO Received mapping task.
+2024-04-17 05:01:40,629 INFO Received mapping task.
+2024-04-17 05:01:40,629 INFO Received mapping task.
+2024-04-17 05:01:40,631 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,631 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,631 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,631 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,632 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,632 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,632 INFO Starting iteration 7
+2024-04-17 05:01:40,632 INFO Received mapping task.
+2024-04-17 05:01:40,632 INFO Received mapping task.
+2024-04-17 05:01:40,632 INFO Received mapping task.
+2024-04-17 05:01:40,634 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,634 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,634 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,634 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,634 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,635 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,635 INFO Starting iteration 8
+2024-04-17 05:01:40,635 INFO Received mapping task.
+2024-04-17 05:01:40,635 INFO Received mapping task.
+2024-04-17 05:01:40,635 INFO Received mapping task.
+2024-04-17 05:01:40,637 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,637 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,637 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,637 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,637 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,638 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,638 INFO Starting iteration 9
+2024-04-17 05:01:40,638 INFO Received mapping task.
+2024-04-17 05:01:40,638 INFO Received mapping task.
+2024-04-17 05:01:40,638 INFO Received mapping task.
+2024-04-17 05:01:40,640 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,640 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,640 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,640 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,641 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,641 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,641 INFO Starting iteration 10
+2024-04-17 05:01:40,641 INFO Received mapping task.
+2024-04-17 05:01:40,641 INFO Received mapping task.
+2024-04-17 05:01:40,641 INFO Received mapping task.
+2024-04-17 05:01:40,643 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,644 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,644 INFO Mapping task completed successfully.
+2024-04-17 05:01:40,644 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:01:40,644 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:01:40,644 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:01:40,644 INFO Final centroids: [[12.630863179096908, 96.83125993903082], [65.92469227195072, 51.192695664924834], [30.93467269277513, 62.34121834917595]]
+2024-04-17 05:05:07,116 DEBUG Using selector: KqueueSelector
+2024-04-17 05:05:16,742 INFO Randomly initialized centroids: [[88.28421977908025, 12.067049557489574], [15.256211095947226, 62.08885022713485], [41.94706427555632, 76.82403075144262]]
+2024-04-17 05:05:16,742 DEBUG Using AsyncIOEngine.POLLER as I/O engine
+2024-04-17 05:05:16,749 INFO Starting iteration 1
+2024-04-17 05:05:16,751 INFO Received mapping task.
+2024-04-17 05:05:16,751 INFO Received mapping task.
+2024-04-17 05:05:16,751 INFO Received mapping task.
+2024-04-17 05:05:16,758 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,758 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,758 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,758 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,758 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,759 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,759 INFO Starting iteration 2
+2024-04-17 05:05:16,759 INFO Received mapping task.
+2024-04-17 05:05:16,759 INFO Received mapping task.
+2024-04-17 05:05:16,759 INFO Received mapping task.
+2024-04-17 05:05:16,761 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,761 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,762 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,762 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,762 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,762 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,762 INFO Starting iteration 3
+2024-04-17 05:05:16,763 INFO Received mapping task.
+2024-04-17 05:05:16,763 INFO Received mapping task.
+2024-04-17 05:05:16,763 INFO Received mapping task.
+2024-04-17 05:05:16,765 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,765 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,765 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,765 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,765 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,765 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,766 INFO Starting iteration 4
+2024-04-17 05:05:16,766 INFO Received mapping task.
+2024-04-17 05:05:16,766 INFO Received mapping task.
+2024-04-17 05:05:16,766 INFO Received mapping task.
+2024-04-17 05:05:16,768 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,768 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,768 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,768 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,768 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,768 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,768 INFO Starting iteration 5
+2024-04-17 05:05:16,769 INFO Received mapping task.
+2024-04-17 05:05:16,769 INFO Received mapping task.
+2024-04-17 05:05:16,769 INFO Received mapping task.
+2024-04-17 05:05:16,771 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,771 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,771 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,771 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,771 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,771 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,771 INFO Starting iteration 6
+2024-04-17 05:05:16,772 INFO Received mapping task.
+2024-04-17 05:05:16,772 INFO Received mapping task.
+2024-04-17 05:05:16,772 INFO Received mapping task.
+2024-04-17 05:05:16,773 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,773 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,774 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,774 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,774 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,774 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,774 INFO Starting iteration 7
+2024-04-17 05:05:16,774 INFO Received mapping task.
+2024-04-17 05:05:16,774 INFO Received mapping task.
+2024-04-17 05:05:16,774 INFO Received mapping task.
+2024-04-17 05:05:16,776 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,776 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,776 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,776 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,776 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,776 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,776 INFO Starting iteration 8
+2024-04-17 05:05:16,777 INFO Received mapping task.
+2024-04-17 05:05:16,777 INFO Received mapping task.
+2024-04-17 05:05:16,777 INFO Received mapping task.
+2024-04-17 05:05:16,779 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,779 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,779 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,779 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,779 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,779 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,779 INFO Starting iteration 9
+2024-04-17 05:05:16,780 INFO Received mapping task.
+2024-04-17 05:05:16,780 INFO Received mapping task.
+2024-04-17 05:05:16,780 INFO Received mapping task.
+2024-04-17 05:05:16,781 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,781 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,781 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,781 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,781 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,782 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,782 INFO Starting iteration 10
+2024-04-17 05:05:16,782 INFO Received mapping task.
+2024-04-17 05:05:16,782 INFO Received mapping task.
+2024-04-17 05:05:16,782 INFO Received mapping task.
+2024-04-17 05:05:16,784 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,784 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,784 INFO Mapping task completed successfully.
+2024-04-17 05:05:16,784 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:05:16,784 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:05:16,784 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:05:16,784 INFO Final centroids: [[88.28421977908025, 12.067049557489574], [15.256211095947226, 62.08885022713485], [41.94706427555632, 76.82403075144262]]
+2024-04-17 05:18:01,964 DEBUG Using selector: KqueueSelector
+2024-04-17 05:18:10,868 INFO Randomly initialized centroids: [[2.425396636192412, 14.200140998826638], [41.94706427555632, 76.82403075144262], [22.918984884832927, 86.29388886815464]]
+2024-04-17 05:18:10,869 DEBUG Using AsyncIOEngine.POLLER as I/O engine
+2024-04-17 05:18:10,875 INFO Starting iteration 1
+2024-04-17 05:18:10,876 INFO Received mapping task.
+2024-04-17 05:18:10,877 INFO Received mapping task.
+2024-04-17 05:18:10,877 INFO Received mapping task.
+2024-04-17 05:18:10,884 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,884 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,884 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,885 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,885 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,885 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,885 INFO Starting iteration 2
+2024-04-17 05:18:10,885 INFO Received mapping task.
+2024-04-17 05:18:10,885 INFO Received mapping task.
+2024-04-17 05:18:10,885 INFO Received mapping task.
+2024-04-17 05:18:10,888 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,888 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,888 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,888 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,888 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,888 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,889 INFO Starting iteration 3
+2024-04-17 05:18:10,889 INFO Received mapping task.
+2024-04-17 05:18:10,889 INFO Received mapping task.
+2024-04-17 05:18:10,889 INFO Received mapping task.
+2024-04-17 05:18:10,891 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,891 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,891 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,892 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,892 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,892 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,892 INFO Starting iteration 4
+2024-04-17 05:18:10,892 INFO Received mapping task.
+2024-04-17 05:18:10,892 INFO Received mapping task.
+2024-04-17 05:18:10,892 INFO Received mapping task.
+2024-04-17 05:18:10,894 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,894 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,894 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,895 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,895 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,895 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,895 INFO Starting iteration 5
+2024-04-17 05:18:10,895 INFO Received mapping task.
+2024-04-17 05:18:10,895 INFO Received mapping task.
+2024-04-17 05:18:10,895 INFO Received mapping task.
+2024-04-17 05:18:10,897 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,898 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,898 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,898 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,898 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,898 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,898 INFO Starting iteration 6
+2024-04-17 05:18:10,898 INFO Received mapping task.
+2024-04-17 05:18:10,898 INFO Received mapping task.
+2024-04-17 05:18:10,898 INFO Received mapping task.
+2024-04-17 05:18:10,900 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,901 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,901 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,901 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,901 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,901 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,901 INFO Starting iteration 7
+2024-04-17 05:18:10,901 INFO Received mapping task.
+2024-04-17 05:18:10,901 INFO Received mapping task.
+2024-04-17 05:18:10,901 INFO Received mapping task.
+2024-04-17 05:18:10,903 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,903 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,903 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,904 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,904 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,904 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,904 INFO Starting iteration 8
+2024-04-17 05:18:10,904 INFO Received mapping task.
+2024-04-17 05:18:10,904 INFO Received mapping task.
+2024-04-17 05:18:10,904 INFO Received mapping task.
+2024-04-17 05:18:10,906 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,907 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,907 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,907 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,907 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,907 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,907 INFO Starting iteration 9
+2024-04-17 05:18:10,907 INFO Received mapping task.
+2024-04-17 05:18:10,907 INFO Received mapping task.
+2024-04-17 05:18:10,907 INFO Received mapping task.
+2024-04-17 05:18:10,909 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,909 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,909 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,910 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,910 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,910 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,910 INFO Starting iteration 10
+2024-04-17 05:18:10,910 INFO Received mapping task.
+2024-04-17 05:18:10,910 INFO Received mapping task.
+2024-04-17 05:18:10,910 INFO Received mapping task.
+2024-04-17 05:18:10,912 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,912 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,912 INFO Mapping task completed successfully.
+2024-04-17 05:18:10,912 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:18:10,912 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:18:10,912 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:18:10,913 INFO Final centroids: [[2.425396636192412, 14.200140998826638], [41.94706427555632, 76.82403075144262], [22.918984884832927, 86.29388886815464]]
+2024-04-17 05:20:30,600 DEBUG Using selector: KqueueSelector
+2024-04-17 05:20:43,055 INFO Randomly initialized centroids: [[30.2214411954406, 60.63826278594955], [31.55712205270708, 36.90041258086754], [2.425396636192412, 14.200140998826638]]
+2024-04-17 05:20:43,055 DEBUG Using AsyncIOEngine.POLLER as I/O engine
+2024-04-17 05:21:09,549 INFO Starting iteration 1
+2024-04-17 05:21:09,550 INFO Received mapping task.
+2024-04-17 05:21:09,550 INFO Received mapping task.
+2024-04-17 05:21:09,551 INFO Received mapping task.
+2024-04-17 05:21:09,555 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,555 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,556 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,556 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,556 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,556 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,556 INFO Starting iteration 2
+2024-04-17 05:21:09,557 INFO Received mapping task.
+2024-04-17 05:21:09,557 INFO Received mapping task.
+2024-04-17 05:21:09,557 INFO Received mapping task.
+2024-04-17 05:21:09,558 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,558 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,559 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,559 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,559 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,559 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,559 INFO Starting iteration 3
+2024-04-17 05:21:09,559 INFO Received mapping task.
+2024-04-17 05:21:09,559 INFO Received mapping task.
+2024-04-17 05:21:09,559 INFO Received mapping task.
+2024-04-17 05:21:09,561 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,561 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,561 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,561 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,561 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,561 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,561 INFO Starting iteration 4
+2024-04-17 05:21:09,562 INFO Received mapping task.
+2024-04-17 05:21:09,562 INFO Received mapping task.
+2024-04-17 05:21:09,562 INFO Received mapping task.
+2024-04-17 05:21:09,563 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,564 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,564 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,564 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,564 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,564 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,564 INFO Starting iteration 5
+2024-04-17 05:21:09,565 INFO Received mapping task.
+2024-04-17 05:21:09,565 INFO Received mapping task.
+2024-04-17 05:21:09,565 INFO Received mapping task.
+2024-04-17 05:21:09,567 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,567 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,567 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,567 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,567 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,567 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,567 INFO Starting iteration 6
+2024-04-17 05:21:09,567 INFO Received mapping task.
+2024-04-17 05:21:09,567 INFO Received mapping task.
+2024-04-17 05:21:09,567 INFO Received mapping task.
+2024-04-17 05:21:09,569 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,569 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,569 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,569 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,569 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,569 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,569 INFO Starting iteration 7
+2024-04-17 05:21:09,570 INFO Received mapping task.
+2024-04-17 05:21:09,570 INFO Received mapping task.
+2024-04-17 05:21:09,570 INFO Received mapping task.
+2024-04-17 05:21:09,572 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,572 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,572 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,572 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,572 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,572 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,572 INFO Starting iteration 8
+2024-04-17 05:21:09,573 INFO Received mapping task.
+2024-04-17 05:21:09,573 INFO Received mapping task.
+2024-04-17 05:21:09,573 INFO Received mapping task.
+2024-04-17 05:21:09,574 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,574 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,574 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,574 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,574 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,575 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,575 INFO Starting iteration 9
+2024-04-17 05:21:09,575 INFO Received mapping task.
+2024-04-17 05:21:09,575 INFO Received mapping task.
+2024-04-17 05:21:09,575 INFO Received mapping task.
+2024-04-17 05:21:09,577 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,577 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,577 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,577 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,577 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,577 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,577 INFO Starting iteration 10
+2024-04-17 05:21:09,578 INFO Received mapping task.
+2024-04-17 05:21:09,578 INFO Received mapping task.
+2024-04-17 05:21:09,578 INFO Received mapping task.
+2024-04-17 05:21:09,579 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,579 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,579 INFO Mapping task completed successfully.
+2024-04-17 05:21:09,580 INFO Response from mapper0: Data processed successfully
+2024-04-17 05:21:09,580 INFO Response from mapper1: Data processed successfully
+2024-04-17 05:21:09,580 INFO Response from mapper2: Data processed successfully
+2024-04-17 05:21:09,580 INFO Final centroids: [[30.2214411954406, 60.63826278594955], [31.55712205270708, 36.90041258086754], [2.425396636192412, 14.200140998826638]]

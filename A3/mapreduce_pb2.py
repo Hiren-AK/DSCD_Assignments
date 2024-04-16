@@ -14,13 +14,15 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\"I\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x01\x12\x17\n\x0finput_data_path\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x03 \x01(\x05\"c\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x1e\n\x16intermediate_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\x05\"2\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\x05\"^\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x18\n\x10output_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\x05\"\"\n\x0c\x46\x65tchRequest\x12\x12\n\ndata_paths\x18\x01 \x03(\t\"\x1d\n\rFetchResponse\x12\x0c\n\x04\x64\x61ta\x18\x01 \x03(\t2S\n\rMapperService\x12\x42\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\"\x00\x32\xad\x01\n\x0eReducerService\x12M\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\x12L\n\x15\x46\x65tchIntermediateData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\"I\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x01\x12\x17\n\x0finput_data_path\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x03 \x01(\x05\"c\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x1e\n\x16intermediate_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\x05\"2\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\x05\"^\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x18\n\x10output_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\x05\"\x1c\n\x0c\x46\x65tchRequest\x12\x0c\n\x04keys\x18\x01 \x03(\t\"n\n\rFetchResponse\x12\x30\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\".mapreduce.FetchResponse.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32\x90\x01\n\rMapperService\x12@\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\x12=\n\x08SendData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse2\x9f\x01\n\x0eReducerService\x12M\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\x12>\n\tFetchData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'mapreduce_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
+  _globals['_FETCHRESPONSE_DATAENTRY']._options = None
+  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_options = b'8\001'
   _globals['_MAPPERTASK']._serialized_start=30
   _globals['_MAPPERTASK']._serialized_end=103
   _globals['_MAPPERRESPONSE']._serialized_start=105
@@ -30,11 +32,13 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_REDUCERRESPONSE']._serialized_start=258
   _globals['_REDUCERRESPONSE']._serialized_end=352
   _globals['_FETCHREQUEST']._serialized_start=354
-  _globals['_FETCHREQUEST']._serialized_end=388
-  _globals['_FETCHRESPONSE']._serialized_start=390
-  _globals['_FETCHRESPONSE']._serialized_end=419
-  _globals['_MAPPERSERVICE']._serialized_start=421
-  _globals['_MAPPERSERVICE']._serialized_end=504
-  _globals['_REDUCERSERVICE']._serialized_start=507
-  _globals['_REDUCERSERVICE']._serialized_end=680
+  _globals['_FETCHREQUEST']._serialized_end=382
+  _globals['_FETCHRESPONSE']._serialized_start=384
+  _globals['_FETCHRESPONSE']._serialized_end=494
+  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_start=451
+  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_end=494
+  _globals['_MAPPERSERVICE']._serialized_start=497
+  _globals['_MAPPERSERVICE']._serialized_end=641
+  _globals['_REDUCERSERVICE']._serialized_start=644
+  _globals['_REDUCERSERVICE']._serialized_end=803
 # @@protoc_insertion_point(module_scope)

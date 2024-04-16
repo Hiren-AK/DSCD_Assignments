@@ -19,6 +19,11 @@ class MapperServiceStub(object):
                 request_serializer=mapreduce__pb2.MapperTask.SerializeToString,
                 response_deserializer=mapreduce__pb2.MapperResponse.FromString,
                 )
+        self.SendData = channel.unary_unary(
+                '/mapreduce.MapperService/SendData',
+                request_serializer=mapreduce__pb2.FetchRequest.SerializeToString,
+                response_deserializer=mapreduce__pb2.FetchResponse.FromString,
+                )
 
 
 class MapperServiceServicer(object):
@@ -30,6 +35,13 @@ class MapperServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SendData(self, request, context):
+        """Simplified the naming, removed redundancy
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MapperServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -37,6 +49,11 @@ def add_MapperServiceServicer_to_server(servicer, server):
                     servicer.ProcessInput,
                     request_deserializer=mapreduce__pb2.MapperTask.FromString,
                     response_serializer=mapreduce__pb2.MapperResponse.SerializeToString,
+            ),
+            'SendData': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendData,
+                    request_deserializer=mapreduce__pb2.FetchRequest.FromString,
+                    response_serializer=mapreduce__pb2.FetchResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -65,6 +82,23 @@ class MapperService(object):
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
+    @staticmethod
+    def SendData(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/mapreduce.MapperService/SendData',
+            mapreduce__pb2.FetchRequest.SerializeToString,
+            mapreduce__pb2.FetchResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
 
 class ReducerServiceStub(object):
     """Missing associated documentation comment in .proto file."""
@@ -80,8 +114,8 @@ class ReducerServiceStub(object):
                 request_serializer=mapreduce__pb2.ReducerTask.SerializeToString,
                 response_deserializer=mapreduce__pb2.ReducerResponse.FromString,
                 )
-        self.FetchIntermediateData = channel.unary_unary(
-                '/mapreduce.ReducerService/FetchIntermediateData',
+        self.FetchData = channel.unary_unary(
+                '/mapreduce.ReducerService/FetchData',
                 request_serializer=mapreduce__pb2.FetchRequest.SerializeToString,
                 response_deserializer=mapreduce__pb2.FetchResponse.FromString,
                 )
@@ -96,8 +130,9 @@ class ReducerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def FetchIntermediateData(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def FetchData(self, request, context):
+        """Changed name for clarity
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -110,8 +145,8 @@ def add_ReducerServiceServicer_to_server(servicer, server):
                     request_deserializer=mapreduce__pb2.ReducerTask.FromString,
                     response_serializer=mapreduce__pb2.ReducerResponse.SerializeToString,
             ),
-            'FetchIntermediateData': grpc.unary_unary_rpc_method_handler(
-                    servicer.FetchIntermediateData,
+            'FetchData': grpc.unary_unary_rpc_method_handler(
+                    servicer.FetchData,
                     request_deserializer=mapreduce__pb2.FetchRequest.FromString,
                     response_serializer=mapreduce__pb2.FetchResponse.SerializeToString,
             ),
@@ -143,7 +178,7 @@ class ReducerService(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def FetchIntermediateData(request,
+    def FetchData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -153,7 +188,7 @@ class ReducerService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/mapreduce.ReducerService/FetchIntermediateData',
+        return grpc.experimental.unary_unary(request, target, '/mapreduce.ReducerService/FetchData',
             mapreduce__pb2.FetchRequest.SerializeToString,
             mapreduce__pb2.FetchResponse.FromString,
             options, channel_credentials,
