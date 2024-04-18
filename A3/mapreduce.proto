@@ -52,6 +52,7 @@ message FetchRequest {
 // Response for fetching data
 message FetchResponse {
     map<string, string> data = 1;  // Maps centroid ID to data points in string format
+    string task_id = 2;
 }
 
 message StatusRequest {

@@ -66,7 +66,7 @@ class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
                 logging.error("Task ID is missing in the request.")
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details('Task ID is required')
-                return mapreduce_pb2.FetchResponse(data={})
+                return mapreduce_pb2.FetchResponse(data=response_data, task_id=request.task_id)
             for key in request.keys:
                 key_index = int(key)  # Convert key to integer for accessing the partition
                 file_path = f"Data/Mappers/M{task_id}/partition_{key_index}.txt"
@@ -81,12 +81,12 @@ class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
                 except Exception as e:
                     logging.error(f"Error reading file for task {task_id}, key {key}: {e}")
                     response_data[key] = ""  # Handle general error
-            return mapreduce_pb2.FetchResponse(data=response_data)
+            return mapreduce_pb2.FetchResponse(data=response_data, task_id=request.task_id)
         except Exception as e:
             logging.error(f"General failure in SendData for task {task_id}: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f'Failed to fetch data for task {task_id}: {str(e)}')
-            return mapreduce_pb2.FetchResponse(data={})
+            return mapreduce_pb2.FetchResponse(data=response_data, task_id=request.task_id)
 
     def GetStatus(self, request, context):
         # Return the current status of the mapper

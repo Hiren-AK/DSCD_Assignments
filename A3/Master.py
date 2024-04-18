@@ -101,35 +101,33 @@ async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, tas
         return None
 
 
-async def send_task_to_reducers(reducer_stubs, data_paths, iteration, num_reducers):
+async def send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers):
     tasks = []
-    # Prepare tasks for all reducers, now correctly passing num_reducers
     for reducer_name, stub in reducer_stubs.items():
         task = stub.ProcessIntermediateData(
             mapreduce_pb2.ReducerTask(
                 data_paths=data_paths,
-                task_id=iteration,
-                num_reducers=num_reducers  # Ensure this is passed to the reducers correctly
+                task_id=task_id,
+                num_reducers=num_reducers
             )
         )
         tasks.append(task)
 
     try:
         responses = await asyncio.gather(*tasks, return_exceptions=True)
-        # Filter and process successful responses
         for response in responses:
             if isinstance(response, Exception):
                 logging.error(f"Reducer task failed with exception: {str(response)}")
                 continue
             if response.success:
-                logging.info(f"Reducer {reducer_name} processed data: {response.message}")
-                return response.output_data_path  # Assuming we only need the first successful response
+                logging.info(f"Reducer {reducer_name} processed data successfully with task ID {task_id}")
+                return response.output_data_path
             else:
-                logging.error(f"Reducer {reducer_name} failed to process data: {response.message}")
+                logging.error(f"Reducer {reducer_name} failed to process data with task ID {task_id}: {response.message}")
         logging.error("No successful reducer responses were received.")
         return None
     except Exception as e:
-        logging.error(f"Failed to send task to reducers: {str(e)}")
+        logging.error(f"Failed to send task to reducers with task ID {task_id}: {str(e)}")
         return None
 
 
@@ -155,7 +153,7 @@ def has_converged(old_centroids, new_centroids, tolerance=0.0001):
     )
     return total_movement < tolerance
 
-async def run_master(num_mappers, num_reducers, num_centroids, max_iterations):
+async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path):
     initial_centroids = random_initial_centroids(data_path, num_centroids)
     if not initial_centroids:
         logging.error("Centroids initialization failed. Exiting.")
@@ -171,7 +169,7 @@ async def run_master(num_mappers, num_reducers, num_centroids, max_iterations):
         logging.info("Starting iteration %d", iteration + 1)
         tasks = []
         for i in range(num_mappers):
-            task_id = f"iteration{iteration}_mapper{i+1}"
+            task_id = f"{MAPPERS[f'mapper{i+1}']}_{iteration:02d}"
             stub = mapper_stubs[f"mapper{i+1}"]
             task = send_task_to_mapper(f"mapper{i+1}", stub, current_centroids, data_path, task_id, num_reducers)
             #logging.debug(f"Task ID sent: {task_id}")
@@ -181,17 +179,17 @@ async def run_master(num_mappers, num_reducers, num_centroids, max_iterations):
 
         if all(response and response.success for response in mapper_responses):
             data_paths = [response.intermediate_data_path for response in mapper_responses if response]
-            await wait_for_mappers(mapper_stubs)  # Wait for all mappers to complete their tasks
-            new_centroids = await send_task_to_reducers(reducer_stubs, data_paths, iteration, num_reducers)
-
-            if new_centroids is None:
-                logging.error("Failed to obtain new centroids from reducers.")
-                continue
-
-            if has_converged(current_centroids, new_centroids):
-                logging.info("Convergence reached.")
-                break
-            current_centroids = new_centroids
+            task_ids = [response.task_id for response in mapper_responses if response]
+            for task_id, data_path in zip(task_ids, data_paths):
+                await wait_for_mappers(mapper_stubs)
+                new_centroids = await send_task_to_reducers(reducer_stubs, data_path, task_id, num_reducers)
+                if new_centroids is None:
+                    logging.error(f"Failed to obtain new centroids from reducers for task ID {task_id}.")
+                    continue
+                if has_converged(current_centroids, new_centroids):
+                    logging.info(f"Convergence reached for task ID {task_id}.")
+                    break
+                current_centroids = new_centroids
         else:
             logging.error("One or more mappers failed, aborting this iteration.")
 
@@ -199,7 +197,7 @@ async def run_master(num_mappers, num_reducers, num_centroids, max_iterations):
 
 async def main():
     num_mappers, num_reducers, num_centroids, max_iterations = get_input_parameters()
-    await run_master(num_mappers, num_reducers, num_centroids, max_iterations)
+    await run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path)
 
 if __name__ == '__main__':
     asyncio.run(main())
