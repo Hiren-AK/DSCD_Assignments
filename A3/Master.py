@@ -16,7 +16,8 @@ MAPPERS = {
 mapper_ports = ["mapper1", "mapper2", "mapper3"]
 
 REDUCERS = {
-    "reducer1": "50054"
+    "reducer1": "50054",
+    "reducer2": "50055"
 }
 
 data_path = 'Data/Input/points.txt'
@@ -77,24 +78,30 @@ def split_data(num_mappers, data_path):
 async def get_mapper_stub(port):
     channel = grpc.aio.insecure_channel(f'localhost:{port}')
     await channel.channel_ready()
+    logging.info(f"Connected to mapper at port {port}")
     return mapreduce_pb2_grpc.MapperServiceStub(channel)
 
-async def get_reducer_stub(port):
-    """Create an asynchronous gRPC stub for a reducer service."""
-    channel = grpc.aio.insecure_channel(f'localhost:{port}')
-    await channel.channel_ready()  # Ensures the channel is ready for operations
-    return mapreduce_pb2_grpc.ReducerServiceStub(channel)
+
+async def get_reducer_stubs(num_reducers):
+    reducer_stubs = {}
+    for i in range(1, num_reducers + 1):
+        port = REDUCERS[f"reducer{i}"]
+        channel = grpc.aio.insecure_channel(f'localhost:{port}')
+        await channel.channel_ready()
+        reducer_stubs[f"reducer{i}"] = mapreduce_pb2_grpc.ReducerServiceStub(channel)
+    return reducer_stubs
+
 
 # Asynchronous function to send tasks to a mapper
-async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, task_id):
+async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, task_id, num_reducers):
     try:
-        # Flatten the centroids list from list of lists to a single list
         flat_centroids = [coord for centroid in centroids for coord in centroid]
         response = await stub.ProcessInput(
             mapreduce_pb2.MapperTask(
                 centroids=flat_centroids,
                 input_data_path=input_data_path,
-                task_id=task_id
+                task_id=task_id,
+                num_reducers=num_reducers  # Sending the number of reducers to mappers
             )
         )
         logging.info(f"Response from {mapper_name}: {response.message}")
@@ -102,6 +109,55 @@ async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, tas
     except grpc.aio.AioRpcError as e:
         logging.error(f"Failed to send task to {mapper_name}: {str(e)}")
         return None
+
+
+async def send_task_to_reducers(reducer_stubs, data_paths, iteration):
+    tasks = []
+    # Prepare tasks for all reducers
+    for reducer_name, stub in reducer_stubs.items():
+        task = stub.ProcessIntermediateData(
+            mapreduce_pb2.ReducerTask(
+                data_paths=data_paths, 
+                task_id=iteration,
+                num_reducers=num_reducers
+            )
+        )
+        tasks.append(task)
+
+    try:
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        # Filter and process successful responses
+        for response in responses:
+            if isinstance(response, Exception):
+                logging.error(f"Reducer task failed with exception: {str(response)}")
+                continue
+            if response.success:
+                logging.info(f"Reducer {reducer_name} processed data: {response.message}")
+                return response.output_data_path  # Assuming we only need the first successful response
+            else:
+                logging.error(f"Reducer {reducer_name} failed to process data: {response.message}")
+        logging.error("No successful reducer responses were received.")
+        return None
+    except Exception as e:
+        logging.error(f"Failed to send task to reducers: {str(e)}")
+        return None
+
+async def wait_for_mappers(mapper_stubs):
+    """Wait for all mappers to complete their tasks by checking if they are not running."""
+    # Continuously check if all mappers are done
+    while True:
+        tasks = [stub.GetStatus(mapreduce_pb2.StatusRequest()) for stub in mapper_stubs.values()]
+        responses = await asyncio.gather(*tasks)
+        # Check if all mappers are not running
+        if all(not response.is_running for response in responses):
+            break  # Exit the loop if all mappers are done
+        await asyncio.sleep(1)  # Wait a bit before checking again
+
+    return responses
+
+
+
+
 
 def has_converged(old_centroids, new_centroids, tolerance=0.0001):
     # A simple convergence check based on Euclidean distance between old and new centroids
@@ -111,43 +167,53 @@ def has_converged(old_centroids, new_centroids, tolerance=0.0001):
     )
     return total_movement < tolerance
 
-async def run_iterations(initial_centroids):
-    mapper_stubs = {name: await get_mapper_stub(MAPPERS[name]) for name in MAPPERS}
-    data_indices = split_data(list(MAPPERS.keys()), DATA_PATH)
+async def run_master(num_mappers, num_reducers, num_centroids, max_iterations):
+    initial_centroids = random_initial_centroids(data_path, num_centroids)
+    if not initial_centroids:
+        logging.error("Centroids initialization failed. Exiting.")
+        return
+    
+    logging.info("Randomly initialized centroids: %s", initial_centroids)
+
+    mapper_stubs = {f"mapper{i+1}": await get_mapper_stub(MAPPERS[f"mapper{i+1}"]) for i in range(num_mappers)}
+    reducer_stubs = await get_reducer_stubs(num_reducers)
     current_centroids = initial_centroids
 
-    for iteration in range(MAX_ITERATIONS):
-        logging.info(f"Starting iteration {iteration + 1}")
-        # Distributing tasks using the send_task_to_mapper function
-        results = await distribute_tasks(mapper_stubs, data_indices, current_centroids)
-        if not all(result and result.success for result in results):
-            logging.error("One or more mappers failed, aborting this iteration")
-            continue  # or break, based on your error handling strategy
+    for iteration in range(max_iterations):
+        logging.info("Starting iteration %d", iteration + 1)
+        mapper_responses = await asyncio.gather(*(
+            send_task_to_mapper(
+                f"mapper{i+1}", 
+                mapper_stubs[f"mapper{i+1}"], 
+                current_centroids, 
+                data_path,  # passing the input data path
+                iteration,
+                num_reducers
+            ) for i in range(num_mappers)
+        ))
 
-        # Logic to process results, update centroids, and check for convergence
-        new_centroids = process_mapper_outputs(results)  # Define this function as needed
-        if has_converged(current_centroids, new_centroids):
-            logging.info("Convergence reached.")
-            break
-        current_centroids = new_centroids
+        if all(response and response.success for response in mapper_responses):
+            data_paths = [response.intermediate_data_path for response in mapper_responses if response]
+            await wait_for_mappers(mapper_stubs)  # Wait for all mappers to complete their tasks
+            new_centroids = await send_task_to_reducers(reducer_stubs, data_paths, iteration)
 
-    logging.info("Final centroids: {}".format(current_centroids))
+            if new_centroids is None:
+                logging.error("Failed to obtain new centroids from reducers.")
+                continue
+
+
+            if has_converged(current_centroids, new_centroids):
+                logging.info("Convergence reached.")
+                break
+            current_centroids = new_centroids
+        else:
+            logging.error("One or more mappers failed, aborting this iteration.")
+
+    logging.info("Final centroids: %s", current_centroids)
 
 async def main():
     num_mappers, num_reducers, num_centroids, max_iterations = get_input_parameters()
-    initial_centroids = random_initial_centroids(data_path, num_centroids)
-    logging.info(f"Randomly initialized centroids: {initial_centroids}")
-
-    mapper_stubs = {f"mapper{i}": await get_mapper_stub(f'5005{i+1}') for i in range(num_mappers)}
-    data_indices = split_data(num_mappers, data_path)
-
-    for iteration in range(max_iterations):
-        logging.info(f"Starting iteration {iteration + 1}")
-        results = await distribute_tasks(mapper_stubs, data_indices, initial_centroids)
-        # Assuming results are processed and new centroids are calculated here
-        # Check for convergence and possibly break the loop if converged
-
-    logging.info("Final centroids: {}".format(initial_centroids))
+    await run_master(num_mappers, num_reducers, num_centroids, max_iterations)
 
 if __name__ == '__main__':
     asyncio.run(main())

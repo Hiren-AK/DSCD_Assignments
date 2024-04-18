@@ -3,6 +3,7 @@ from concurrent import futures
 import time
 import logging
 import asyncio
+import numpy as np
 
 import mapreduce_pb2
 import mapreduce_pb2_grpc
@@ -30,43 +31,41 @@ def create_mapper_stubs():
         mapper_stubs[mapper] = stub
     return mapper_stubs
 
-mapper_stubs = create_mapper_stubs()
-
-
-mapper_stubs = create_mapper_stubs()
-
-
 class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
 
-    async def fetch_data_from_all_mappers(mapper_stubs, keys):
-        tasks = []
-        for stub in mapper_stubs:
-            request = mapreduce_pb2.FetchRequest(keys=keys)
-            task = stub.SendData(request)
-            tasks.append(task)
+    async def FetchData(self, keys, mapper_stubs):
+        """ Fetches data from mappers based on keys provided in the request. """
+        logging.info(f"Fetching data with keys: {keys}")
+        tasks = [stub.SendData(mapreduce_pb2.FetchRequest(keys=keys)) for stub in mapper_stubs.values()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         data = {}
         for result in results:
             if isinstance(result, Exception):
-                logging.error(f"Failed to fetch data from mapper: {str(result)}")
+                logging.error(f"Failed to fetch data from mapper: {result}")
             else:
                 data.update(result.data)
         return data
 
 
-    async def process_intermediate_data(self, request, context):
+    async def ProcessIntermediateData(self, request, context):
         logging.info("Received request to process intermediate data for task ID: {}".format(request.task_id))
+        num_reducers = request.num_reducers  # Now dynamically determined from the request
+        partition_keys = [str(i + 1) for i in range(num_reducers)]  # Create keys for each partition file
+
         try:
-            mapper_stubs = create_mapper_stubs()  # Create or retrieve a list of stubs
-            data = await fetch_data_from_all_mappers(mapper_stubs.values(), request.data_paths)
+            data = await self.FetchData(mapreduce_pb2.FetchRequest(keys=partition_keys), context)
+            if not data.data:
+                raise ValueError("No data received from mappers.")
+
             centroids = {}
-            for centroid_id, points_str in data.items():
+            for key, points_str in data.data.items():
                 points = np.fromstring(points_str, sep=',').reshape(-1, 2)
-                centroids[centroid_id] = points
+                centroids[int(key)] = points  # Using key to keep track of centroids
 
             new_centroids = {cid: np.mean(pts, axis=0).tolist() for cid, pts in centroids.items()}
             output_data_path = f"Data/Reducers/R{request.task_id}.txt"
             np.savetxt(output_data_path, np.array(list(new_centroids.values())), delimiter=",")
+
             logging.info(f"Reducer saved new centroids at {output_data_path}")
             return mapreduce_pb2.ReducerResponse(success=True, message="Reduction completed successfully", output_data_path=output_data_path, task_id=request.task_id)
         except Exception as e:
@@ -75,18 +74,18 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
             context.set_details(str(e))
             return mapreduce_pb2.ReducerResponse(success=False, message=str(e), task_id=request.task_id)
 
-    
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+
+
+async def serve():
+    server = grpc.aio.server()
     mapreduce_pb2_grpc.add_ReducerServiceServicer_to_server(Reducer(), server)
     server.add_insecure_port('[::]:50054')
-    server.start()
+    await server.start()
     try:
-        while True:
-            time.sleep(86400)
+        await server.wait_for_termination()
     except KeyboardInterrupt:
-        server.stop(0)
+        await server.stop(None)
 
 if __name__ == '__main__':
-    serve()
+    asyncio.run(serve())

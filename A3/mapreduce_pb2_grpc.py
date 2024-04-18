@@ -24,6 +24,11 @@ class MapperServiceStub(object):
                 request_serializer=mapreduce__pb2.FetchRequest.SerializeToString,
                 response_deserializer=mapreduce__pb2.FetchResponse.FromString,
                 )
+        self.GetStatus = channel.unary_unary(
+                '/mapreduce.MapperService/GetStatus',
+                request_serializer=mapreduce__pb2.StatusRequest.SerializeToString,
+                response_deserializer=mapreduce__pb2.StatusResponse.FromString,
+                )
 
 
 class MapperServiceServicer(object):
@@ -42,6 +47,12 @@ class MapperServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MapperServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -54,6 +65,11 @@ def add_MapperServiceServicer_to_server(servicer, server):
                     servicer.SendData,
                     request_deserializer=mapreduce__pb2.FetchRequest.FromString,
                     response_serializer=mapreduce__pb2.FetchResponse.SerializeToString,
+            ),
+            'GetStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetStatus,
+                    request_deserializer=mapreduce__pb2.StatusRequest.FromString,
+                    response_serializer=mapreduce__pb2.StatusResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -96,6 +112,23 @@ class MapperService(object):
         return grpc.experimental.unary_unary(request, target, '/mapreduce.MapperService/SendData',
             mapreduce__pb2.FetchRequest.SerializeToString,
             mapreduce__pb2.FetchResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/mapreduce.MapperService/GetStatus',
+            mapreduce__pb2.StatusRequest.SerializeToString,
+            mapreduce__pb2.StatusResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
