@@ -49,10 +49,10 @@ def process_data(data):
 
 class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
 
-    async def FetchData(self, keys, mapper_stubs):
-        """ Fetches data from mappers based on keys provided in the request. """
-        logging.info(f"Fetching data with keys: {keys}")
-        tasks = [stub.SendData(mapreduce_pb2.FetchRequest(keys=keys)) for stub in mapper_stubs.values()]
+    async def FetchData(self, keys, mapper_stubs, task_id):
+        """ Fetches data from mappers based on keys and task_id provided in the request. """
+        logging.info(f"Fetching data with keys: {keys} for task ID: {task_id}")
+        tasks = [stub.SendData(mapreduce_pb2.FetchRequest(keys=keys, task_id=task_id)) for stub in mapper_stubs.values()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         data = {}
         for result in results:
@@ -71,8 +71,8 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
             num_reducers = request.num_reducers
             partition_keys = [str(i + 1) for i in range(num_reducers)]  # Generating partition keys based on the number of reducers
 
-            # Fetching data from mappers
-            fetched_data = await self.FetchData(partition_keys, mapper_stubs)
+            # Fetching data from mappers using the task_id from the request
+            fetched_data = await self.FetchData(partition_keys, mapper_stubs, request.task_id)
             if not fetched_data:
                 raise ValueError("No data received from mappers.")
 

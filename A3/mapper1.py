@@ -58,7 +58,7 @@ class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
             )
 
     def SendData(self, request, context):
-        logging.info(f"Attempting to send data for keys {request.keys} from task {request.task_id}")
+        logging.info(f"Attempting to send data for keys {request.keys} from task {request.task_id} for iteration {request.iteration}")
         response_data = {}
         try:
             task_id = request.task_id  # Ensure task_id is correctly handled
