@@ -31,6 +31,22 @@ def create_mapper_stubs():
         mapper_stubs[mapper] = stub
     return mapper_stubs
 
+def process_data(data):
+    # Check if the data array is empty
+    if data.size == 0:
+        logging.warning("Attempted to process empty data slice.")
+        return None  # or handle as appropriate for your application
+
+    # Calculate the mean of the data points
+    try:
+        centroid = np.mean(data, axis=0)
+        logging.info(f"Calculated new centroid: {centroid}")
+        return centroid
+    except Exception as e:
+        logging.error("Error calculating centroid:", exc_info=True)
+        return None
+
+
 class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
 
     async def FetchData(self, keys, mapper_stubs):
@@ -48,31 +64,53 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
 
 
     async def ProcessIntermediateData(self, request, context):
-        logging.info("Received request to process intermediate data for task ID: {}".format(request.task_id))
-        num_reducers = request.num_reducers  # Now dynamically determined from the request
-        partition_keys = [str(i + 1) for i in range(num_reducers)]  # Create keys for each partition file
-
+        logging.info(f"Received request to process intermediate data for task ID: {request.task_id}")
         try:
-            data = await self.FetchData(mapreduce_pb2.FetchRequest(keys=partition_keys), context)
-            if not data.data:
+            # Dynamically creating mapper stubs
+            mapper_stubs = create_mapper_stubs()
+            num_reducers = request.num_reducers
+            partition_keys = [str(i + 1) for i in range(num_reducers)]  # Generating partition keys based on the number of reducers
+
+            # Fetching data from mappers
+            fetched_data = await self.FetchData(partition_keys, mapper_stubs)
+            if not fetched_data:
                 raise ValueError("No data received from mappers.")
 
+            # Process fetched data to calculate new centroids
             centroids = {}
-            for key, points_str in data.data.items():
+            for key, points_str in fetched_data.items():
+                # Converting string data back to numpy array
                 points = np.fromstring(points_str, sep=',').reshape(-1, 2)
-                centroids[int(key)] = points  # Using key to keep track of centroids
+                if points.size > 0:
+                    centroids[int(key)] = points
+                else:
+                    logging.warning(f"No data points associated with key {key}")
 
-            new_centroids = {cid: np.mean(pts, axis=0).tolist() for cid, pts in centroids.items()}
+            if not centroids:
+                raise ValueError("No valid data points received for processing.")
+
+            # Calculating new centroids
+            new_centroids = {cid: np.mean(pts, axis=0).tolist() for cid, pts in centroids.items() if len(pts) > 0}
             output_data_path = f"Data/Reducers/R{request.task_id}.txt"
-            np.savetxt(output_data_path, np.array(list(new_centroids.values())), delimiter=",")
 
+            # Saving the new centroids to a file
+            np.savetxt(output_data_path, np.array(list(new_centroids.values())), delimiter=",")
             logging.info(f"Reducer saved new centroids at {output_data_path}")
+
             return mapreduce_pb2.ReducerResponse(success=True, message="Reduction completed successfully", output_data_path=output_data_path, task_id=request.task_id)
+
+        except ValueError as ve:
+            logging.error(f"ValueError in processing: {ve}")
+            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            context.set_details(str(ve))
+            return mapreduce_pb2.ReducerResponse(success=False, message=str(ve), task_id=request.task_id)
+
         except Exception as e:
-            logging.error(f"Error in processing intermediate data: {e}")
+            logging.error(f"Unexpected error in processing intermediate data: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return mapreduce_pb2.ReducerResponse(success=False, message=str(e), task_id=request.task_id)
+
 
 
 

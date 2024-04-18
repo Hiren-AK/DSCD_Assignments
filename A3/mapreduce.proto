@@ -13,26 +13,25 @@ service ReducerService {
     rpc FetchData(FetchRequest) returns (FetchResponse);  // Changed name for clarity
 }
 
-// Details of a task sent to a Mapper by the Master
 message MapperTask {
     repeated double centroids = 1; // List of centroids
-    string input_data_path = 2; // Path to the input data
-    int32 task_id = 3; // Task ID
-    int32 num_reducers = 4;          // Number of reducers
+    string input_data_path = 2;     // Path to the input data
+    string task_id = 3;             // Task ID, now a string
+    int32 num_reducers = 4;         // Number of reducers
 }
 
 // Response from a Mapper
 message MapperResponse {
-    bool success = 1;               // Indicates if the task was successful
-    string message = 2;             // Error message or success confirmation
-    string intermediate_data_path = 3; // Where the mapper wrote its output
-    int32 task_id = 4;              // Task ID for tracking
+    bool success = 1;
+    string message = 2;
+    string intermediate_data_path = 3;
+    string task_id = 4;
 }
 
 // Details of a task sent to a Reducer by the Master
 message ReducerTask {
     repeated string data_paths = 1; // Paths to data files that need to be processed
-    int32 task_id = 2;              // Task ID for tracking
+    string task_id = 2;              // Task ID for tracking
     int32 num_reducers = 3;
 }
 
@@ -41,7 +40,7 @@ message ReducerResponse {
     bool success = 1;               // Indicates if the task was successful
     string message = 2;             // Error message or success confirmation
     string output_data_path = 3;    // Where the reducer wrote its final output
-    int32 task_id = 4;              // Task ID for tracking
+    string task_id = 4;              // Task ID for tracking
 }
 
 // Request for fetching data from Mappers by Reducers
