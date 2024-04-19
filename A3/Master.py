@@ -5,6 +5,7 @@ import mapreduce_pb2_grpc
 import logging
 import numpy as np
 import pandas as pd
+import os
 
 # ports for each mapper
 MAPPERS = {
@@ -153,37 +154,34 @@ async def wait_for_mappers(mapper_stubs):
 
     return responses
 
+def read_centroids_from_file(file_path):
+    with open(file_path, 'r') as file:
+        centroids = [list(map(float, line.split(','))) for line in file]
+    return centroids
+
 
 def has_converged(old_centroids, new_centroids, tolerance=0.0001):
     try:
-        # Convert paths to actual centroid data if needed
+        # Handle potential string paths to centroid files
         if isinstance(new_centroids, str):
-            # Assuming new_centroids is a path to the centroids file
             new_centroids = np.loadtxt(new_centroids, delimiter=",")
+            logging.debug(f"Loaded new centroids from {new_centroids}: {new_centroids}")
         if isinstance(old_centroids, str):
             old_centroids = np.loadtxt(old_centroids, delimiter=",")
+            logging.debug(f"Loaded old centroids from {old_centroids}: {old_centroids}")
 
-        # Log the data to see what's being compared
-        logging.debug(f"Old centroids: {old_centroids}")
-        logging.debug(f"New centroids: {new_centroids}")
+        # Ensure both are numpy arrays
+        old_centroids = np.array(old_centroids, dtype=float)
+        new_centroids = np.array(new_centroids, dtype=float)
 
-        # Check if the centroids are numpy arrays and convert if not
-        if not isinstance(old_centroids, np.ndarray):
-            old_centroids = np.array(old_centroids, dtype=float)
-        if not isinstance(new_centroids, np.ndarray):
-            new_centroids = np.array(new_centroids, dtype=float)
+        # Calculate total movement
+        total_movement = sum(np.linalg.norm(oc - nc) for oc, nc in zip(old_centroids, new_centroids))
+        logging.debug(f"Total movement: {total_movement}, Tolerance: {tolerance}")
 
-        # A simple convergence check based on Euclidean distance between old and new centroids
-        total_movement = sum(
-            np.linalg.norm(oc - nc)
-            for oc, nc in zip(old_centroids, new_centroids)
-        )
         return total_movement < tolerance
     except Exception as e:
         logging.error("Error checking convergence:", exc_info=True)
         return False
-
-
 
 async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path):
     initial_centroids = random_initial_centroids(data_path, num_centroids)
@@ -192,7 +190,6 @@ async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, d
         return
     
     logging.info("Randomly initialized centroids: %s", initial_centroids)
-
     mapper_stubs = {f"mapper{i+1}": await get_mapper_stub(MAPPERS[f"mapper{i+1}"]) for i in range(num_mappers)}
     reducer_stubs = await get_reducer_stubs(num_reducers)
     current_centroids = initial_centroids
@@ -201,31 +198,38 @@ async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, d
         logging.info("Starting iteration %d", iteration + 1)
         tasks = []
         for i in range(num_mappers):
-            task_id = f"{MAPPERS[f'mapper{i+1}']}_{iteration:02d}"
+            task_id = f"iteration{iteration}_mapper{i+1}"
             stub = mapper_stubs[f"mapper{i+1}"]
+            # Check if centroids are a filepath and read them if so
+            if isinstance(current_centroids, str) and os.path.exists(current_centroids):
+                current_centroids = read_centroids_from_file(current_centroids)
             task = send_task_to_mapper(f"mapper{i+1}", stub, current_centroids, data_path, task_id, num_reducers)
-            #logging.debug(f"Task ID sent: {task_id}")
             tasks.append(task)
         
         mapper_responses = await asyncio.gather(*tasks)
 
         if all(response and response.success for response in mapper_responses):
             data_paths = [response.intermediate_data_path for response in mapper_responses if response]
-            task_ids = [response.task_id for response in mapper_responses if response]
-            for task_id, data_path in zip(task_ids, data_paths):
-                await wait_for_mappers(mapper_stubs)
-                new_centroids = await send_task_to_reducers(reducer_stubs, data_path, task_id, num_reducers)
-                if new_centroids is None:
-                    logging.error(f"Failed to obtain new centroids from reducers for task ID {task_id}.")
-                    continue
-                if has_converged(current_centroids, new_centroids):
-                    logging.info(f"Convergence reached for task ID {task_id}.")
-                    break
+            new_centroids = await send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers)
+
+            # Log the outcome of reducer's work
+            if new_centroids is None:
+                logging.error("No new centroids were obtained from reducers.")
+            else:
+                logging.debug(f"New centroids received from reducers: {new_centroids}")
+            
+            # Proceed to check convergence if new centroids were obtained
+            if new_centroids is not None and has_converged(current_centroids, new_centroids):
+                logging.info("Convergence has been reached.")
                 current_centroids = new_centroids
+            else:
+                logging.error("Convergence not reached or new centroids were invalid.")
         else:
             logging.error("One or more mappers failed, aborting this iteration.")
+            break
 
     logging.info("Final centroids: %s", current_centroids)
+
 
 async def main():
     num_mappers, num_reducers, num_centroids, max_iterations = get_input_parameters()
