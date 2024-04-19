@@ -1,3 +1,4 @@
+import os
 import grpc
 import asyncio
 import numpy as np
@@ -10,10 +11,10 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
     def __init__(self):
         self.state = "free"  # busy, free, OFFLINE: for response to master if CheckHealth was called
         self.local_dir = './Data/Reducers/'  # Directory to store final output
-        self.mappers, self.reducers = self.read_config('./Data/config.txt')
+        self.mappers, self.reducers = self.read_config('./config.txt')
         print("Reducer started")
 
-    def read_config(filename):
+    def read_config(self, filename):
         mappers = {}
         reducers = {}
         with open(filename, 'r') as file:

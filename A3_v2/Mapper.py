@@ -7,16 +7,16 @@ import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
 
 class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
-    def __init__(self, centroids):
+    def __init__(self):
         self.centroids = None
         self.num_partitions = None             # number of partitions = R (number of reducers)
         self.state = "free"                 # busy, free, OFFLINE: for response to master if CheckHealth was called
         self.local_dir = './Data/Mappers/'  # Directory to store intermediate data
         self.partitions_dir = None          #outputs of partitions
-        self.mappers, self.reducers = self.read_config('./Data/config.txt')
+        self.mappers, self.reducers = self.read_config('./config.txt')
         print("Mapper started")
 
-    def read_config(filename):
+    def read_config(self, filename):
         mappers = {}
         reducers = {}
         with open(filename, 'r') as file:
