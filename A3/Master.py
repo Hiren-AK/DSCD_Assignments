@@ -160,7 +160,7 @@ def read_centroids_from_file(file_path):
     return centroids
 
 
-def has_converged(old_centroids, new_centroids, tolerance=0.0001):
+def has_converged(old_centroids, new_centroids, tolerance=200):
     try:
         # Handle potential string paths to centroid files
         if isinstance(new_centroids, str):
