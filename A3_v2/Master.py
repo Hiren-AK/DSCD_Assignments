@@ -11,22 +11,21 @@ from collections import defaultdict
 # Additional imports for gRPC might be necessary
 
 class Master:
-    def __init__(self, num_mappers, num_reducers, num_centroids, max_iterations):
-        self.num_mappers = num_mappers
-        self.num_reducers = num_reducers
+    def __init__(self, num_centroids, max_iterations):
         self.num_centroids = num_centroids
         self.max_iterations = max_iterations
-        self.input_data_dir = './Data/Input'
+        self.input_data_dir = './Data/Input/'
         self.centroids = None
         self.converged = False
         self.single_file_input = True
         self.single_file_path = None  # To store the path of the single input file
         self.dumpfile = './Data/centroids.txt'
         self.outputfile = './Data/output.txt'
-        self.mappers, self.reducers = self.read_config('./Data/config.txt')  # Adjusted to call with default config path
+        self.reducer_responses = []
+        self.mappers, self.reducers = self.read_config('./config.txt')  # Adjusted to call with default config path
         self.alive_mappers, self.alive_reducers = self.monitor_health()
 
-    def read_config(filename):
+    def read_config(self, filename):
         mappers = {}
         reducers = {}
         with open(filename, 'r') as file:
@@ -59,18 +58,22 @@ class Master:
     def load_data(self):
         try:
             # Get all file paths in the directory
-            files = [os.path.join(self.input_data_dir, f) for f in os.listdir(self.input_data_dir) if os.path.isfile(os.path.join(self.input_data_dir, f))]
+            all_files = [os.path.join(self.input_data_dir, f) for f in os.listdir(self.input_data_dir) if os.path.isfile(os.path.join(self.input_data_dir, f))]
         except Exception as e:
             print(f"Ran into issue while loading data: {str(e)}")
             return None, False
 
+        files = [filename for filename in all_files if filename.endswith(".txt")]
+
         if len(files) == 1:
             # Load data from a single file
+            print("single file input")
             data = np.loadtxt(files[0], delimiter=',')
             self.single_file_input = True
             self.single_file_path = files[0]  # Store the path of the single input file
             return data
         elif len(files) > 1:
+            print("multiple files input")
             self.single_file_input = False
             return files, False
         else:
@@ -196,32 +199,73 @@ class Master:
     def create_grpc_stub(self, address):
         channel = grpc.insecure_channel(address)
         return mapreduce_pb2_grpc.MapperServiceStub(channel)
-
-    def check_convergence(self):
-        # Placeholder for convergence checking logic
-        return False
     
     async def invoke_reducers(self):
-        reducer_params = defaultdict(list)
-        for task in self.alive_mappers.keys():
-            for reducer_id in self.alive_reducers.keys():
-                reducer_params[reducer_id].append(task)
+        self.reducer_responses = []
+        keys_per_reducer = defaultdict(list)
+        centroid_indices = list(range(self.num_centroids))
+
+        for i, key in enumerate(centroid_indices):
+            reducer_id = list(self.alive_reducers.keys())[i % len(self.alive_reducers.keys())]
+            keys_per_reducer[reducer_id].append(key)
 
         tasks = []
         for reducer_id, address in self.alive_reducers.items():
-            task = self.process_reducer_task(reducer_params[reducer_id], reducer_id, address)
+            task = self.process_reducer_task(
+                list(self.alive_mappers.keys()),
+                keys_per_reducer[reducer_id],
+                reducer_id,
+                address
+            )
             tasks.append(task)
 
         await asyncio.gather(*tasks)
 
-    async def process_reducer_task(self, mapper_task_ids, reducer_id, address):
+    async def process_reducer_task(self, active_mappers, keys, reducer_id, address):
         async with grpc.aio.insecure_channel(address) as channel:
             stub = mapreduce_pb2_grpc.ReducerServiceStub(channel)
+            task = mapreduce_pb2.ReducerTask(
+                data_paths=active_mappers,
+                keys=keys,
+                task_id=reducer_id
+            )
             try:
-                response = await stub.ProcessIntermediateData(mapreduce_pb2.ReducerTask(data_paths=mapper_task_ids, task_id=reducer_id))
+                response = await stub.ProcessIntermediateData(task)
+                self.reducer_responses.append(response)
                 print(f"Task sent to reducer {reducer_id}. Response: {response.message}")
             except grpc.aio.AioRpcError as e:
                 print(f"Failed to send task to reducer {reducer_id}: {str(e)}")
+    
+    def handle_reducer_responses(self):
+        # Compile new centroids from reducer responses
+        new_centroids = np.zeros((self.num_centroids, len(self.centroids[0])))  # Assuming all centroids have the same dimension
+        counts = np.zeros(self.num_centroids)
+
+        for response in self.reducer_responses:
+            for key, centroid in response.centroids.items():
+                new_centroids[key] += centroid
+                counts[key] += 1
+
+        # Average the centroids
+        for i in range(self.num_centroids):
+            if counts[i] > 0:
+                new_centroids[i] /= counts[i]
+
+        print(f"New centroids calculated: {new_centroids}")
+        self.check_convergence(new_centroids)
+
+        return self.check_convergence()
+
+    def check_convergence(self, new_centroids):
+        # Placeholder for actual convergence checking logic
+        # This could involve checking if the centroids have moved less than a certain threshold
+        difference = np.linalg.norm(self.centroids - new_centroids)
+        self.converged = difference < 0.001  # Example threshold
+        if self.converged:
+            print("Convergence reached.")
+        else:
+            print("No convergence yet.")
+        return self.converged
 
     
     async def run(self):
@@ -234,24 +278,21 @@ class Master:
         else:
             self.initialize_centroids(np.loadtxt(data[0], delimiter=','))  # Assuming data loading for centroids from the first file if multiple
         
-        
-        data_splits = self.split_data(data)
-        self.alive_mappers, self.alive_reducers = self.monitor_health()
-        
         i = 0
         while not self.converged and i < self.max_iterations:
             print(f"Running iteration {i+1}")
 
             while True:
-                if self.check_convergence():
-                    print("Convergence reached.")
-                    self.converged = True
-                    break
                 # Check the health of mappers and reducers before dispatching tasks
                 self.alive_mappers, self.alive_reducers = self.monitor_health()
 
-                if not self.alive_mappers:
+                if len(self.alive_mappers.keys()) == 0:
                     print("No alive mappers available. Retrying...")
+                    await asyncio.sleep(5)  # Wait before retrying
+                    continue
+
+                if len(self.alive_reducers.keys()) == 0:
+                    print("No alive reducers available. Retrying...")
                     await asyncio.sleep(5)  # Wait before retrying
                     continue
 
@@ -268,24 +309,24 @@ class Master:
                 num_mappers, num_reducers = self.monitor_health()
 
                 # Check if same number of reducers are alive
-                if len(self.alive_mappers) != num_mappers:
+                if len(self.alive_mappers.keys()) != num_mappers:
                     self.alive_mappers, self.alive_reducers = self.monitor_health()
                     print("Number of mappers changed. Retrying...")
                     await asyncio.sleep(5)  # Wait before retrying
                     continue
 
                 # Check if same number of reducers are alive
-                if len(self.alive_reducers) != num_reducers:
+                if len(self.alive_reducers.keys()) != num_reducers:
                     self.alive_mappers, self.alive_reducers = self.monitor_health()
                     print("Number of reducers changed. Retrying...")
                     await asyncio.sleep(5)  # Wait before retrying
                     continue
 
                 # If all is set, invoke reducers
-                if len(self.alive_reducers) == num_reducers and len(self.alive_mappers) == num_mappers:
+                if len(self.alive_reducers.keys()) == num_reducers and len(self.alive_mappers.keys()) == num_mappers:
                     await self.invoke_reducers()
-                    break  # Break out of the retry loop if reducers are successfully invoked
-
+                    if (self.handle_reducer_responses()):
+                        break
             self.dump_centroids()
             i += 1
         if not self.converged:
@@ -297,14 +338,12 @@ class Master:
             self.dump_centroids()
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: master.py num_mappers num_reducers num_centroids max_iterations")
+    if len(sys.argv) != 3:
+        print("Usage: master.py num_centroids max_iterations")
         sys.exit(1)
 
-    num_mappers = int(sys.argv[1])
-    num_reducers = int(sys.argv[2])
-    num_centroids = int(sys.argv[3])
-    max_iterations = int(sys.argv[4])
+    num_centroids = int(sys.argv[1])
+    max_iterations = int(sys.argv[2])
 
-    master = Master(num_mappers, num_reducers, num_centroids, max_iterations)
+    master = Master(num_centroids, max_iterations)
     asyncio.run(master.run())

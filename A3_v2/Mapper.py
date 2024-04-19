@@ -14,6 +14,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         self.local_dir = './Data/Mappers/'  # Directory to store intermediate data
         self.partitions_dir = None          #outputs of partitions
         self.mappers, self.reducers = self.read_config('./config.txt')
+        self.key_partition_map = {}
         print("Mapper started")
 
     def read_config(self, filename):
@@ -97,12 +98,25 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
     async def partition(self, key_values):
         # Partition data
         print("Patritioning the key value pairs...")
-        partitions = {f"partition_{i}.txt": [] for i in range(self.num_partitions)}
+        self.key_partition_map = {}
+        partitions = {}
         for key, value in key_values:
-            partition_idx = hash(key) % self.num_partitions  # Determine partition index based on key
+            print("1")
+            partition_idx = key % self.num_partitions  # Determine partition index based on key
+            print("2")
             partition_file = os.path.join(self.partitions_dir, f"partition_{partition_idx}.txt")
-            partitions[partition_file].append((key, value))
+            print("3")
+            if partition_file in partition_file.keys():
+                print("4")
+                partitions[partition_file].append((key, value))
+            else:
+                print("5")
+                partitions[partition_file] = []
+                partitions[partition_file].append((key, value))
+            print("6")
+            self.key_partition_map[key] = partition_file
 
+        print("7")
         # Write key-value pairs to partition files
         for partition_file, pairs in partitions.items():
             with open(partition_file, 'w') as f:  # Open in append mode
@@ -110,6 +124,20 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                     f.write(f"{key},{','.join(map(str, value))}\n")
 
         print(f"Partitioning done. Total number of partition files: {len(partitions)}")
+    
+    async def FetchIntermediateData(self, request, context):
+        response = mapreduce_pb2.FetchResponse()
+        for key in request.keys:
+            partition_file = self.key_partition_map.get(key, '')
+            key_value_pair = response.key_values.add()
+            key_value_pair.key = key
+            if os.path.exists(partition_file):
+                with open(partition_file, 'r') as file:
+                    for line in file:
+                        data_point = key_value_pair.values.add()
+                        data_point.features.extend(map(float, line.strip().split(',')))
+        return response
+
 
 
 def serve():

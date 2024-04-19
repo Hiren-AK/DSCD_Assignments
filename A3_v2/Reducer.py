@@ -45,26 +45,36 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
         self.state = 'busy'
         data = defaultdict(list)
 
-        # shuffle phase
-        task_id = request.task_id
-        active_mappers = request.data_paths
+        # Assume `active_mappers` and fetching logic as previously defined
+        for mapper_id in request.data_paths:  # `data_paths` now stores active mappers
+            address = self.mappers[mapper_id]
+            channel = grpc.aio.insecure_channel(address)
+            stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
+            fetch_request = mapreduce_pb2.FetchRequest(keys=request.keys, task_id=request.task_id)
+            try:
+                fetch_response = await stub.FetchIntermediateData(fetch_request)
+                for pair in fetch_response.key_values:
+                    for data_point in pair.values:
+                        data[pair.key].append(np.array(data_point.features))
+            except grpc.aio.AioRpcError as e:
+                print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
+                continue
 
-        # send all active mappers a reuest to send available partitions, 
-
-        # Reduce phase
+        # Calculate new centroids
         new_centroids = {}
         for key, points in data.items():
-            points = np.array(points)
-            new_centroids[key] = np.mean(points, axis=0)
-
-        # Writing output to file
-        output_path = os.path.join(self.local_dir, f"reducer_output_{request.task_id}.txt")
-        with open(output_path, 'w') as file:
-            for key, centroid in new_centroids.items():
-                file.write(f"{key},{','.join(map(str, centroid))}\n")
+            if points:
+                new_centroids[key] = np.mean(np.vstack(points), axis=0).tolist()
+            else:
+                new_centroids[key] = []  # Or some default value if no points were found
 
         self.state = 'free'
-        return mapreduce_pb2.ReducerResponse(success=True, message="Data processed successfully.", task_id=request.task_id, output_data_path=output_path)
+        return mapreduce_pb2.ReducerResponse(
+            success=True,
+            message="Data processed successfully.",
+            centroids=new_centroids,
+            task_id=request.task_id
+        )
 
 def serve():
     server = grpc.aio.server()

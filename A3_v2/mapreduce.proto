@@ -28,7 +28,7 @@ message MapperTask {
     int32 start_index = 4;                  // Starting index for processing in single file scenario
     int32 end_index = 5;                    // Ending index for processing in single file scenario
     string task_id = 6;                     // Task ID
-    int32 num_partitions = 7                // R, number of partitions, number of reducers
+    int32 num_partitions = 7;                // R, number of partitions, number of reducers
 }
 
 // Response from mappers
@@ -41,23 +41,31 @@ message MapperResponse {
 // Reducer tasks details sent by the master
 message ReducerTask {
     repeated string data_paths = 1; // Paths to data files that need to be processed
-    string task_id = 2;              // Task ID for tracking
+    repeated int32 keys = 2;        // List of centroid keys this reducer will handle
+    string task_id = 3;              // Task ID for tracking
 }
 
 // Response from reducers
 message ReducerResponse {
-    bool success = 1;               // Indicates if the task was successful
-    string message = 2;             // Error message or success confirmation
-    string output_data_path = 3;    // Where the reducer wrote its final output
+    bool success = 1;                // Indicates if the task was successful
+    string message = 2;              // Error message or success confirmation
+    map<int32, repeated double> centroids = 3; // Map of centroid indices to their new centroid values
     string task_id = 4;              // Task ID for tracking
 }
 
-// Request for fetching data from mappers by reducers
 message FetchRequest {
-    repeated string data_paths = 1; // Paths to data files to fetch
+    repeated int32 keys = 1; // Centroid indices requested by the reducer
+    string task_id = 2;      // Task ID to identify the request
+} string data_paths = 1; // Paths to data files to fetch
+
+message DataPoint {
+    repeated double features = 1; // Features of the data point
 }
 
-// Response for fetching data
 message FetchResponse {
-    repeated string data = 1;       // Actual data fetched from mappers
+    message KeyValuePair {
+        int32 key = 1;           // Centroid ID
+        repeated DataPoint values = 2;  // Data points associated with the centroid
+    }
+    repeated KeyValuePair key_values = 1; // List of key-value pairs
 }
