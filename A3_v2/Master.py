@@ -147,8 +147,8 @@ class Master:
                 )
             tasks.append(self.process_task(task, mapper_id))
         
-        await asyncio.gather(*tasks)
-        if all(task.success for task in tasks):  # Check if all tasks were successful
+        results = await asyncio.gather(*tasks)
+        if all(result.success for result in results):  # Check if all tasks were successful
             print("All tasks completed successfully.")
             return True
         else:
@@ -171,7 +171,8 @@ class Master:
         # Check the health of mappers
         active_mappers = {}
         for mapper_id, address in self.mappers.items():
-            stub = self.create_grpc_stub(address)
+            channel = grpc.insecure_channel(address)
+            stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
             try:
                 response = stub.CheckHealth(Empty())
                 if response.is_alive and response.status == "free":
@@ -184,7 +185,9 @@ class Master:
         # Check the health of reducers
         active_reducers = {}
         for reducer_id, address in self.reducers.items():
-            stub = self.create_grpc_stub(address)
+
+            channel = grpc.insecure_channel(address)
+            stub = mapreduce_pb2_grpc.ReducerServiceStub(channel)
             try:
                 response = stub.CheckHealth(Empty())
                 if response.is_alive and response.status == "free":

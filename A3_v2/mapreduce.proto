@@ -35,7 +35,7 @@ message MapperTask {
 message MapperResponse {
     bool success = 1;               // Indicates if the task was successful
     string message = 2;             // Error message or success confirmation
-    string task_id = 4;              // Task ID for tracking
+    string task_id = 3;              // Task ID for tracking
 }
 
 // Reducer tasks details sent by the master

@@ -143,7 +143,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_MapperServiceServicer_to_server(MapperServicer(), server)
-    server.add_insecure_port('[::]:50051')
+    server.add_insecure_port('[::]:50053')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()

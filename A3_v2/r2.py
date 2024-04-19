@@ -79,7 +79,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_ReducerServiceServicer_to_server(ReducerServicer(), server)
-    server.add_insecure_port('[::]:55002')
+    server.add_insecure_port('[::]:50052')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()
