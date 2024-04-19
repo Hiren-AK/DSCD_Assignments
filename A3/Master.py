@@ -1,239 +1,305 @@
+import sys
+import numpy as np
+import os
+import grpc
 import asyncio
-import grpc.aio
+import threading
 import mapreduce_pb2
 import mapreduce_pb2_grpc
-import logging
-import numpy as np
-import pandas as pd
-import os
+from google.protobuf.empty_pb2 import Empty
+from collections import defaultdict
+# Additional imports for gRPC might be necessary
 
-# ports for each mapper
-MAPPERS = {
-    "mapper1": "50051",
-    "mapper2": "50052",
-    "mapper3": "50053",
-}
+class Master:
+    def __init__(self, num_centroids, max_iterations):
+        self.num_centroids = num_centroids
+        self.max_iterations = max_iterations
+        self.input_data_dir = './Data/Input'
+        self.centroids = None
+        self.converged = False
+        self.single_file_input = True
+        self.single_file_path = None  # To store the path of the single input file
+        self.dumpfile = './Data/centroids.txt'
+        self.outputfile = './Data/output.txt'
+        self.mappers, self.reducers = self.read_config('./config.txt')  # Adjusted to call with default config path
+        self.alive_mappers, self.alive_reducers = self.monitor_health()
 
-mapper_ports = ["mapper1", "mapper2", "mapper3"]
-
-REDUCERS = {
-    "reducer1": "50054",
-    "reducer2": "50055"
-}
-
-data_path = 'Data/Input/points.txt'
-
-def get_input_parameters():
-    """
-    Prompts the user to input necessary configuration parameters.
-    """
-    num_mappers = int(input("Enter the number of mappers: "))
-    num_reducers = int(input("Enter the number of reducers: "))
-    num_centroids = int(input("Enter the number of centroids: "))
-    max_iterations = int(input("Enter the maximum number of K-Means iterations: "))
-    return num_mappers, num_reducers, num_centroids, max_iterations
-
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s %(message)s',
-                    handlers=[logging.FileHandler("dump.txt"),
-                              logging.StreamHandler()])
-
-def random_initial_centroids(data_path, k):
-    """
-    Randomly selects 'k' centroids from a given dataset.
-    """
-    try:
-        data = pd.read_csv(data_path, header=None)
-        centroids = data.sample(n=k).values.tolist()
-        return centroids
-    except Exception as e:
-        logging.error(f"Error reading the data or selecting centroids: {str(e)}")
-        sys.exit("Failed to initialize centroids.")
-
-
-def split_data(num_mappers, data_path):
-    """
-    Splits the data indices and assigns them to mappers.
-    """
-    data = pd.read_csv(data_path, header=None)
-    total_points = len(data)
-    chunk_size = total_points // num_mappers
-    data_indices = {f"mapper{i}": (i * chunk_size, (i + 1) * chunk_size if i < num_mappers - 1 else total_points)
-                    for i in range(num_mappers)}
-    return data_indices
-
-
-# Helper function to get a gRPC stub for a given mapper
-async def get_mapper_stub(port):
-    channel = grpc.aio.insecure_channel(f'localhost:{port}')
-    await channel.channel_ready()
-    logging.info(f"Connected to mapper at port {port}")
-    return mapreduce_pb2_grpc.MapperServiceStub(channel)
-
-
-async def get_reducer_stubs(num_reducers):
-    reducer_stubs = {}
-    for i in range(1, num_reducers + 1):
-        port = REDUCERS[f"reducer{i}"]
-        channel = grpc.aio.insecure_channel(f'localhost:{port}')
-        await channel.channel_ready()
-        reducer_stubs[f"reducer{i}"] = mapreduce_pb2_grpc.ReducerServiceStub(channel)
-    return reducer_stubs
-
-
-# Asynchronous function to send tasks to a mapper
-async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, task_id, num_reducers):
-    try:
-        # Log the data types and values
-        logging.debug(f"Sending to {mapper_name}: centroids={centroids}, task_id={task_id}, num_reducers={num_reducers}")
-
-        # Ensure centroids are in the correct format (list of floats)
-        if isinstance(centroids, str):
-            centroids = eval(centroids)  # Convert string list to actual list if needed, be cautious with eval
-
-        flat_centroids = [coord for centroid in centroids for coord in centroid]
-        
-        response = await stub.ProcessInput(
-            mapreduce_pb2.MapperTask(
-                centroids=flat_centroids,
-                input_data_path=input_data_path,
-                task_id=str(task_id),  # Ensure task_id is a string
-                num_reducers=int(num_reducers)  # Ensure num_reducers is an integer
-            )
-        )
-        logging.info(f"Response from {mapper_name}: {response.message} for Task {task_id}")
-        return response
-    except grpc.aio.AioRpcError as e:
-        logging.error(f"Failed to send task to {mapper_name}: {str(e)}")
-        return None
-
-
-
-async def send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers):
-    tasks = []
-    for reducer_name, stub in reducer_stubs.items():
-        task = stub.ProcessIntermediateData(
-            mapreduce_pb2.ReducerTask(
-                data_paths=data_paths,
-                task_id=task_id,
-                num_reducers=num_reducers
-            )
-        )
-        tasks.append(task)
-
-    try:
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
-        for response in responses:
-            if isinstance(response, Exception):
-                logging.error(f"Reducer task failed with exception: {str(response)}")
-                continue
-            if response.success:
-                logging.info(f"Reducer {reducer_name} processed data successfully with task ID {task_id}")
-                return response.output_data_path
-            else:
-                logging.error(f"Reducer {reducer_name} failed to process data with task ID {task_id}: {response.message}")
-        logging.error("No successful reducer responses were received.")
-        return None
-    except Exception as e:
-        logging.error(f"Failed to send task to reducers with task ID {task_id}: {str(e)}")
-        return None
-
-
-async def wait_for_mappers(mapper_stubs):
-    """Wait for all mappers to complete their tasks by checking if they are not running."""
-    # Continuously check if all mappers are done
-    while True:
-        tasks = [stub.GetStatus(mapreduce_pb2.StatusRequest()) for stub in mapper_stubs.values()]
-        responses = await asyncio.gather(*tasks)
-        # Check if all mappers are not running
-        if all(not response.is_running for response in responses):
-            break  # Exit the loop if all mappers are done
-        await asyncio.sleep(1)  # Wait a bit before checking again
-
-    return responses
-
-def read_centroids_from_file(file_path):
-    with open(file_path, 'r') as file:
-        centroids = [list(map(float, line.split(','))) for line in file]
-    return centroids
-
-
-def has_converged(old_centroids, new_centroids, tolerance=0.0001):
-    try:
-        # Handle potential string paths to centroid files
-        if isinstance(new_centroids, str):
-            new_centroids = np.loadtxt(new_centroids, delimiter=",")
-            logging.debug(f"Loaded new centroids from {new_centroids}: {new_centroids}")
-        if isinstance(old_centroids, str):
-            old_centroids = np.loadtxt(old_centroids, delimiter=",")
-            logging.debug(f"Loaded old centroids from {old_centroids}: {old_centroids}")
-
-        # Ensure both are numpy arrays
-        old_centroids = np.array(old_centroids, dtype=float)
-        new_centroids = np.array(new_centroids, dtype=float)
-
-        # Calculate total movement
-        total_movement = sum(np.linalg.norm(oc - nc) for oc, nc in zip(old_centroids, new_centroids))
-        logging.debug(f"Total movement: {total_movement}, Tolerance: {tolerance}")
-
-        return total_movement < tolerance
-    except Exception as e:
-        logging.error("Error checking convergence:", exc_info=True)
-        return False
-
-async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path):
-    initial_centroids = random_initial_centroids(data_path, num_centroids)
-    if not initial_centroids:
-        logging.error("Centroids initialization failed. Exiting.")
-        return
+    def read_config(self, filename):
+        mappers = {}
+        reducers = {}
+        with open(filename, 'r') as file:
+            for line in file:
+                if line.startswith('#') or not line.strip():
+                    continue
+                parts = line.strip().split(',')
+                service_id = parts[0]
+                host = parts[1]
+                port = parts[2]
+                if 'M' in service_id:
+                    mappers[service_id] = host + ':' + port
+                elif 'R' in service_id:
+                    reducers[service_id] = host + ':' + port
+        return mappers, reducers
     
-    logging.info("Randomly initialized centroids: %s", initial_centroids)
-    mapper_stubs = {f"mapper{i+1}": await get_mapper_stub(MAPPERS[f"mapper{i+1}"]) for i in range(num_mappers)}
-    reducer_stubs = await get_reducer_stubs(num_reducers)
-    current_centroids = initial_centroids
+    def dump_centroids(self, convergence):
+        with open(self.dumpfile, 'a') as f:  # Open in append mode
+            f.write(f"Iteration centroids: {self.centroids}\n")
+        if convergence:
+            with open(self.outputfile, 'w') as f:  # Open in append mode
+                f.write(f"Centroids: {self.centroids}\n")
 
-    for iteration in range(max_iterations):
-        logging.info("Starting iteration %d", iteration + 1)
-        tasks = []
-        for i in range(num_mappers):
-            task_id = f"iteration{iteration}_mapper{i+1}"
-            stub = mapper_stubs[f"mapper{i+1}"]
-            # Check if centroids are a filepath and read them if so
-            if isinstance(current_centroids, str) and os.path.exists(current_centroids):
-                current_centroids = read_centroids_from_file(current_centroids)
-            task = send_task_to_mapper(f"mapper{i+1}", stub, current_centroids, data_path, task_id, num_reducers)
-            tasks.append(task)
+    def initialize_centroids(self, data):
+        # Randomly choose centroids from the data points
+        indices = np.random.choice(len(data), self.num_centroids, replace=False)
+        self.centroids = data[indices]
+        print(f"Initial centroids: {self.centroids}")
         
-        mapper_responses = await asyncio.gather(*tasks)
+    def load_data(self):
+        try:
+            # Get all file paths in the directory
+            files = [os.path.join(self.input_data_dir, f) for f in os.listdir(self.input_data_dir) if os.path.isfile(os.path.join(self.input_data_dir, f))]
+        except Exception as e:
+            print(f"Ran into issue while loading data: {str(e)}")
+            return None, False
 
-        if all(response and response.success for response in mapper_responses):
-            data_paths = [response.intermediate_data_path for response in mapper_responses if response]
-            new_centroids = await send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers)
-
-            # Log the outcome of reducer's work
-            if new_centroids is None:
-                logging.error("No new centroids were obtained from reducers.")
-            else:
-                logging.debug(f"New centroids received from reducers: {new_centroids}")
-            
-            # Proceed to check convergence if new centroids were obtained
-            if new_centroids is not None and has_converged(current_centroids, new_centroids):
-                logging.info("Convergence has been reached.")
-                current_centroids = new_centroids
-            else:
-                logging.error("Convergence not reached or new centroids were invalid.")
+        if len(files) == 1:
+            # Load data from a single file
+            data = np.loadtxt(files[0], delimiter=',')
+            self.single_file_input = True
+            self.single_file_path = files[0]  # Store the path of the single input file
+            return data
+        elif len(files) > 1:
+            self.single_file_input = False
+            return files, False
         else:
-            logging.error("One or more mappers failed, aborting this iteration.")
-            break
+            print("Input file/s missing")
+            return None
+    
+    def split_data(self, data):
+        active_mappers, _ = self.monitor_health()  # Get the currently available mappers
+        num_active_mappers = len(active_mappers)
 
-    logging.info("Final centroids: %s", current_centroids)
+        if self.single_file_input:
+            # Handle splitting for a single file input based on line indices
+            num_data_points = len(data)
+            if num_data_points < num_active_mappers:
+                raise ValueError("Not enough data points relative to the number of available mappers")
 
+            data_splits = []
+            indices_per_mapper = num_data_points // num_active_mappers
+            extra_data = num_data_points % num_active_mappers
+            start_index = 0
 
-async def main():
-    num_mappers, num_reducers, num_centroids, max_iterations = get_input_parameters()
-    await run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path)
+            for mapper_id in active_mappers.keys():
+                end_index = start_index + indices_per_mapper + (1 if extra_data > 0 else 0)
+                if extra_data > 0:
+                    extra_data -= 1
+                data_splits.append((mapper_id, start_index, end_index))
+                start_index = end_index
+        else:
+            # Handle multiple files by distributing files among the available mappers
+            if len(data) < num_active_mappers:
+                raise ValueError("Not enough files relative to the number of available mappers")
+            data_splits = []
+            files_per_mapper = len(data) // num_active_mappers
+            extra_files = len(data) % num_active_mappers
+            data_index = 0
 
-if __name__ == '__main__':
-    asyncio.run(main())
+            for mapper_id in active_mappers.keys():
+                files_for_this_mapper = data[data_index:data_index + files_per_mapper + (1 if extra_files > 0 else 0)]
+                data_splits.append((mapper_id, files_for_this_mapper))
+                data_index += len(files_for_this_mapper)
+                if extra_files > 0:
+                    extra_files -= 1
+
+        return data_splits
+    
+    async def dispatch_tasks(self, data_splits):
+        tasks = []
+        for split_info in data_splits:
+            mapper_id = split_info[0]
+            if self.single_file_input:
+                _, start_index, end_index = split_info
+                task = mapreduce_pb2.MapperTask(
+                    centroids=np.array(self.centroids).flatten().tolist(),
+                    input_data_paths=None,
+                    single_input_file=self.single_file_path,
+                    start_index=start_index,
+                    end_index=end_index,
+                    task_id=str(mapper_id),
+                    num_partitions=len(self.alive_reducers.keys())
+                )
+            else:
+                _, files = split_info
+                task = mapreduce_pb2.MapperTask(
+                    centroids=np.array(self.centroids).flatten().tolist(),
+                    input_data_paths=files,
+                    single_input_file=None,
+                    start_index=-1,
+                    end_index=-1,
+                    task_id=str(mapper_id),
+                    num_partitions=len(self.alive_reducers.keys())
+                )
+            tasks.append(self.process_task(task, mapper_id))
+        
+        await asyncio.gather(*tasks)
+        if all(task.success for task in tasks):  # Check if all tasks were successful
+            print("All tasks completed successfully.")
+            return True
+        else:
+            print("Some tasks failed. Retrying...")
+            await asyncio.sleep(5)  # Wait before retrying
+            return False
+    
+    async def process_task(self, task, mapper_id):
+        address = self.mappers[mapper_id]
+        async with grpc.aio.insecure_channel(address) as channel:
+            stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
+            try:
+                response = await stub.ProcessInput(task)
+                print(f"Task sent to mapper {mapper_id}. Response: {response.message}")
+            except grpc.aio.AioRpcError as e:
+                print(f"Failed to send task to mapper {mapper_id}: {str(e)}")
+                # Optionally, handle reassignment here
+
+    def monitor_health(self):
+        # Check the health of mappers
+        active_mappers = {}
+        for mapper_id, address in self.mappers.items():
+            stub = self.create_grpc_stub(address)
+            try:
+                response = stub.CheckHealth(Empty())
+                if response.is_alive and response.status == "free":
+                    active_mappers[mapper_id] = address
+                elif response.status == "busy":
+                    print(f"mapper {mapper_id} is busy")
+            except grpc.RpcError:
+                print(f"Mapper {mapper_id} at {address} is not responding.")
+
+        # Check the health of reducers
+        active_reducers = {}
+        for reducer_id, address in self.reducers.items():
+            stub = self.create_grpc_stub(address)
+            try:
+                response = stub.CheckHealth(Empty())
+                if response.is_alive and response.status == "free":
+                    active_reducers[reducer_id] = address
+                elif response.status == "busy":
+                    print(f"reducer {reducer_id} is busy")
+            except grpc.RpcError:
+                print(f"Reducer {reducer_id} at {address} is not responding.")
+
+        return active_mappers, active_reducers
+
+    def create_grpc_stub(self, address):
+        channel = grpc.insecure_channel(address)
+        return mapreduce_pb2_grpc.MapperServiceStub(channel)
+
+    def check_convergence(self):
+        # Placeholder for convergence checking logic
+        return False
+    
+    async def invoke_reducers(self):
+        reducer_params = defaultdict(list)
+        for task in self.alive_mappers.keys():
+            for reducer_id in self.alive_reducers.keys():
+                reducer_params[reducer_id].append(task)
+
+        tasks = []
+        for reducer_id, address in self.alive_reducers.items():
+            task = self.process_reducer_task(reducer_params[reducer_id], reducer_id, address)
+            tasks.append(task)
+
+        await asyncio.gather(*tasks)
+
+    async def process_reducer_task(self, mapper_task_ids, reducer_id, address):
+        async with grpc.aio.insecure_channel(address) as channel:
+            stub = mapreduce_pb2_grpc.ReducerServiceStub(channel)
+            try:
+                response = await stub.ProcessIntermediateData(mapreduce_pb2.ReducerTask(data_paths=mapper_task_ids, task_id=reducer_id))
+                print(f"Task sent to reducer {reducer_id}. Response: {response.message}")
+            except grpc.aio.AioRpcError as e:
+                print(f"Failed to send task to reducer {reducer_id}: {str(e)}")
+
+    
+    async def run(self):
+        data = self.load_data()
+        if data is None:
+            return
+
+        if self.single_file_input:
+            self.initialize_centroids(data)
+        else:
+            self.initialize_centroids(np.loadtxt(data[0], delimiter=','))  # Assuming data loading for centroids from the first file if multiple
+        
+        
+        data_splits = self.split_data(data)
+        self.alive_mappers, self.alive_reducers = self.monitor_health()
+        
+        i = 0
+        while not self.converged and i < self.max_iterations:
+            print(f"Running iteration {i+1}")
+
+            while True:
+                if self.check_convergence():
+                    print("Convergence reached.")
+                    self.converged = True
+                    break
+                # Check the health of mappers and reducers before dispatching tasks
+                self.alive_mappers, self.alive_reducers = self.monitor_health()
+
+                if not self.alive_mappers:
+                    print("No alive mappers available. Retrying...")
+                    await asyncio.sleep(5)  # Wait before retrying
+                    continue
+
+                data_splits = self.split_data(data)
+
+                success = await self.dispatch_tasks(data_splits)
+
+                if not success:
+                    print("One/Some mappers are off. Retrying...")
+                    self.alive_mappers, self.alive_reducers = self.monitor_health()
+                    await asyncio.sleep(5)  # Wait before retrying
+                    continue
+
+                num_mappers, num_reducers = self.monitor_health()
+
+                # Check if same number of reducers are alive
+                if len(self.alive_mappers) != num_mappers:
+                    self.alive_mappers, self.alive_reducers = self.monitor_health()
+                    print("Number of mappers changed. Retrying...")
+                    await asyncio.sleep(5)  # Wait before retrying
+                    continue
+
+                # Check if same number of reducers are alive
+                if len(self.alive_reducers) != num_reducers:
+                    self.alive_mappers, self.alive_reducers = self.monitor_health()
+                    print("Number of reducers changed. Retrying...")
+                    await asyncio.sleep(5)  # Wait before retrying
+                    continue
+
+                # If all is set, invoke reducers
+                if len(self.alive_reducers) == num_reducers and len(self.alive_mappers) == num_mappers:
+                    await self.invoke_reducers()
+                    break  # Break out of the retry loop if reducers are successfully invoked
+
+            self.dump_centroids()
+            i += 1
+        if not self.converged:
+            print(f"Reached max iterations, printing output in {self.outputfile}")
+            with open(self.outputfile, 'w') as f:  # Open in append mode
+                f.write(f"Centroids: {self.centroids}\n")
+        else:
+            print(f"Reached convergence, printing output in {self.outputfile}")
+            self.dump_centroids()
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: master.py num_centroids max_iterations")
+        sys.exit(1)
+    num_centroids = int(sys.argv[1])
+    max_iterations = int(sys.argv[2])
+
+    master = Master(num_centroids, max_iterations)
+    asyncio.run(master.run())

@@ -1,0 +1,6 @@
+# Mappers
+M1,localhost,50051
+M2,localhost,50052
+# Reducers
+R1,localhost,50053
+R2,localhost,50054
