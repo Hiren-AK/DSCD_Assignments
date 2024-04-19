@@ -85,13 +85,21 @@ async def get_reducer_stubs(num_reducers):
 # Asynchronous function to send tasks to a mapper
 async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, task_id, num_reducers):
     try:
+        # Log the data types and values
+        logging.debug(f"Sending to {mapper_name}: centroids={centroids}, task_id={task_id}, num_reducers={num_reducers}")
+
+        # Ensure centroids are in the correct format (list of floats)
+        if isinstance(centroids, str):
+            centroids = eval(centroids)  # Convert string list to actual list if needed, be cautious with eval
+
         flat_centroids = [coord for centroid in centroids for coord in centroid]
+        
         response = await stub.ProcessInput(
             mapreduce_pb2.MapperTask(
                 centroids=flat_centroids,
                 input_data_path=input_data_path,
-                task_id=task_id,
-                num_reducers=num_reducers  # Sending the number of reducers to mappers
+                task_id=str(task_id),  # Ensure task_id is a string
+                num_reducers=int(num_reducers)  # Ensure num_reducers is an integer
             )
         )
         logging.info(f"Response from {mapper_name}: {response.message} for Task {task_id}")
@@ -99,6 +107,7 @@ async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, tas
     except grpc.aio.AioRpcError as e:
         logging.error(f"Failed to send task to {mapper_name}: {str(e)}")
         return None
+
 
 
 async def send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers):
@@ -146,12 +155,35 @@ async def wait_for_mappers(mapper_stubs):
 
 
 def has_converged(old_centroids, new_centroids, tolerance=0.0001):
-    # A simple convergence check based on Euclidean distance between old and new centroids
-    total_movement = sum(
-        np.linalg.norm(np.array(oc) - np.array(nc))
-        for oc, nc in zip(old_centroids, new_centroids)
-    )
-    return total_movement < tolerance
+    try:
+        # Convert paths to actual centroid data if needed
+        if isinstance(new_centroids, str):
+            # Assuming new_centroids is a path to the centroids file
+            new_centroids = np.loadtxt(new_centroids, delimiter=",")
+        if isinstance(old_centroids, str):
+            old_centroids = np.loadtxt(old_centroids, delimiter=",")
+
+        # Log the data to see what's being compared
+        logging.debug(f"Old centroids: {old_centroids}")
+        logging.debug(f"New centroids: {new_centroids}")
+
+        # Check if the centroids are numpy arrays and convert if not
+        if not isinstance(old_centroids, np.ndarray):
+            old_centroids = np.array(old_centroids, dtype=float)
+        if not isinstance(new_centroids, np.ndarray):
+            new_centroids = np.array(new_centroids, dtype=float)
+
+        # A simple convergence check based on Euclidean distance between old and new centroids
+        total_movement = sum(
+            np.linalg.norm(oc - nc)
+            for oc, nc in zip(old_centroids, new_centroids)
+        )
+        return total_movement < tolerance
+    except Exception as e:
+        logging.error("Error checking convergence:", exc_info=True)
+        return False
+
+
 
 async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path):
     initial_centroids = random_initial_centroids(data_path, num_centroids)

@@ -4,6 +4,8 @@ import time
 import logging
 import asyncio
 import numpy as np
+import os
+
 
 import mapreduce_pb2
 import mapreduce_pb2_grpc
@@ -69,7 +71,7 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
             # Dynamically creating mapper stubs
             mapper_stubs = create_mapper_stubs()
             num_reducers = request.num_reducers
-            partition_keys = [str(i + 1) for i in range(num_reducers)]  # Generating partition keys based on the number of reducers
+            partition_keys = [str(i + 1) for i in range(num_reducers)]  # Generating partition keys
 
             # Fetching data from mappers using the task_id from the request
             fetched_data = await self.FetchData(partition_keys, mapper_stubs, request.task_id)
@@ -91,7 +93,9 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
 
             # Calculating new centroids
             new_centroids = {cid: np.mean(pts, axis=0).tolist() for cid, pts in centroids.items() if len(pts) > 0}
-            output_data_path = f"Data/Reducers/R{request.task_id}.txt"
+            output_directory = f"Data/Reducers/"
+            os.makedirs(output_directory, exist_ok=True)  # Ensure directory exists
+            output_data_path = os.path.join(output_directory, f"R{request.task_id}.txt")
 
             # Saving the new centroids to a file
             np.savetxt(output_data_path, np.array(list(new_centroids.values())), delimiter=",")
@@ -110,6 +114,7 @@ class Reducer(mapreduce_pb2_grpc.ReducerServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return mapreduce_pb2.ReducerResponse(success=False, message=str(e), task_id=request.task_id)
+
 
 
 
