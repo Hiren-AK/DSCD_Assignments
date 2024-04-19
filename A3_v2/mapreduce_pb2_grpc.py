@@ -20,6 +20,11 @@ class MapperServiceStub(object):
                 request_serializer=mapreduce__pb2.MapperTask.SerializeToString,
                 response_deserializer=mapreduce__pb2.MapperResponse.FromString,
                 )
+        self.FetchIntermediateData = channel.unary_unary(
+                '/mapreduce.MapperService/FetchIntermediateData',
+                request_serializer=mapreduce__pb2.FetchRequest.SerializeToString,
+                response_deserializer=mapreduce__pb2.FetchResponse.FromString,
+                )
         self.CheckHealth = channel.unary_unary(
                 '/mapreduce.MapperService/CheckHealth',
                 request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
@@ -31,6 +36,12 @@ class MapperServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ProcessInput(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def FetchIntermediateData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -49,6 +60,11 @@ def add_MapperServiceServicer_to_server(servicer, server):
                     servicer.ProcessInput,
                     request_deserializer=mapreduce__pb2.MapperTask.FromString,
                     response_serializer=mapreduce__pb2.MapperResponse.SerializeToString,
+            ),
+            'FetchIntermediateData': grpc.unary_unary_rpc_method_handler(
+                    servicer.FetchIntermediateData,
+                    request_deserializer=mapreduce__pb2.FetchRequest.FromString,
+                    response_serializer=mapreduce__pb2.FetchResponse.SerializeToString,
             ),
             'CheckHealth': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckHealth,
@@ -79,6 +95,23 @@ class MapperService(object):
         return grpc.experimental.unary_unary(request, target, '/mapreduce.MapperService/ProcessInput',
             mapreduce__pb2.MapperTask.SerializeToString,
             mapreduce__pb2.MapperResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def FetchIntermediateData(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/mapreduce.MapperService/FetchIntermediateData',
+            mapreduce__pb2.FetchRequest.SerializeToString,
+            mapreduce__pb2.FetchResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -114,11 +147,6 @@ class ReducerServiceStub(object):
                 request_serializer=mapreduce__pb2.ReducerTask.SerializeToString,
                 response_deserializer=mapreduce__pb2.ReducerResponse.FromString,
                 )
-        self.FetchIntermediateData = channel.unary_unary(
-                '/mapreduce.ReducerService/FetchIntermediateData',
-                request_serializer=mapreduce__pb2.FetchRequest.SerializeToString,
-                response_deserializer=mapreduce__pb2.FetchResponse.FromString,
-                )
         self.CheckHealth = channel.unary_unary(
                 '/mapreduce.ReducerService/CheckHealth',
                 request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
@@ -130,12 +158,6 @@ class ReducerServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ProcessIntermediateData(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def FetchIntermediateData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -154,11 +176,6 @@ def add_ReducerServiceServicer_to_server(servicer, server):
                     servicer.ProcessIntermediateData,
                     request_deserializer=mapreduce__pb2.ReducerTask.FromString,
                     response_serializer=mapreduce__pb2.ReducerResponse.SerializeToString,
-            ),
-            'FetchIntermediateData': grpc.unary_unary_rpc_method_handler(
-                    servicer.FetchIntermediateData,
-                    request_deserializer=mapreduce__pb2.FetchRequest.FromString,
-                    response_serializer=mapreduce__pb2.FetchResponse.SerializeToString,
             ),
             'CheckHealth': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckHealth,
@@ -189,23 +206,6 @@ class ReducerService(object):
         return grpc.experimental.unary_unary(request, target, '/mapreduce.ReducerService/ProcessIntermediateData',
             mapreduce__pb2.ReducerTask.SerializeToString,
             mapreduce__pb2.ReducerResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def FetchIntermediateData(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/mapreduce.ReducerService/FetchIntermediateData',
-            mapreduce__pb2.FetchRequest.SerializeToString,
-            mapreduce__pb2.FetchResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

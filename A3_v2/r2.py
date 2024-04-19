@@ -9,7 +9,7 @@ from google.protobuf.empty_pb2 import Empty
 
 class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
     def __init__(self):
-        self.state = "free"  # busy, free, OFFLINE: for response to master if CheckHealth was called
+        self.state = 'free'  # busy, free, OFFLINE: for response to master if CheckHealth was called
         self.local_dir = './Data/Reducers/'  # Directory to store final output
         self.mappers, self.reducers = self.read_config('./config.txt')
         print("Reducer started")
@@ -31,7 +31,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                     reducers[service_id] = host + ':' + port
         return mappers, reducers
 
-    async def CheckHealth(self, request, context):
+    def CheckHealth(self, request, context):
         # Perform health check
         if self.state == 'free':
             is_alive = True # Modify this based on health status
@@ -60,13 +60,11 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                 print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
                 continue
 
-        # Calculate new centroids
+        # Create the new centroids with proper structure
         new_centroids = {}
         for key, points in data.items():
-            if points:
-                new_centroids[key] = np.mean(np.vstack(points), axis=0).tolist()
-            else:
-                new_centroids[key] = []  # Or some default value if no points were found
+            centroid = mapreduce_pb2.Centroid(coordinates=np.mean(np.vstack(points), axis=0).tolist())
+            new_centroids[key] = centroid
 
         self.state = 'free'
         return mapreduce_pb2.ReducerResponse(

@@ -6,18 +6,23 @@ import "google/protobuf/empty.proto";
 
 service MapperService {
     rpc ProcessInput(MapperTask) returns (MapperResponse) {}
+    rpc FetchIntermediateData(FetchRequest) returns (FetchResponse) {}
     rpc CheckHealth(google.protobuf.Empty) returns (HealthStatus) {}
 }
 
 service ReducerService{
-    rpc ProcessIntermediateData(ReducerTask) returns (ReducerResponse);
-    rpc FetchIntermediateData(FetchRequest) returns (FetchResponse) {}
+    rpc ProcessIntermediateData(ReducerTask) returns (ReducerResponse) {}
     rpc CheckHealth(google.protobuf.Empty) returns (HealthStatus) {}
 }
 
 message HealthStatus {
     bool is_alive = 1;
     string status = 2;
+}
+
+// Message to hold a list of doubles (e.g., centroid coordinates)
+message Centroid {
+    repeated double coordinates = 1;
 }
 
 // Mapper task details sent by the master
@@ -47,16 +52,17 @@ message ReducerTask {
 
 // Response from reducers
 message ReducerResponse {
-    bool success = 1;                // Indicates if the task was successful
-    string message = 2;              // Error message or success confirmation
-    map<int32, repeated double> centroids = 3; // Map of centroid indices to their new centroid values
-    string task_id = 4;              // Task ID for tracking
+    bool success = 1;
+    string message = 2;
+    map<int32, Centroid> centroids = 3; // Using the Centroid message for the map values
+    string task_id = 4;
 }
 
 message FetchRequest {
     repeated int32 keys = 1; // Centroid indices requested by the reducer
     string task_id = 2;      // Task ID to identify the request
-} string data_paths = 1; // Paths to data files to fetch
+    string data_paths = 3; // Paths to data files to fetch
+} 
 
 message DataPoint {
     repeated double features = 1; // Features of the data point

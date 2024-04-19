@@ -34,7 +34,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                     reducers[service_id] = host + ':' + port
         return mappers, reducers
 
-    async def CheckHealth(self, request, context):
+    def CheckHealth(self, request, context):
         # Perform health check if needed
         if self.state == 'free':
             is_alive = True # Modify this based on health status
@@ -87,15 +87,15 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         self.partitions_dir = mapper_dir
 
         try:
-            await self.partition(output)
+            self.partition(output)
+            self.state = 'free'
+
+            return mapreduce_pb2.MapperResponse(success=True, message=f"Mapper {task_id} processed data.", task_id=task_id)
+
         except:
             print("Ran into an issue while partitioning")
-        
-        self.state = 'free'
 
-        return mapreduce_pb2.MapperResponse(success=True, message=f"Mapper {task_id} processed data.", task_id=task_id)
-
-    async def partition(self, key_values):
+    def partition(self, key_values):
         # Partition data
         print("Patritioning the key value pairs...")
         self.key_partition_map = {}
@@ -103,7 +103,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         for key, value in key_values:
             partition_idx = key % self.num_partitions  # Determine partition index based on key
             partition_file = os.path.join(self.partitions_dir, f"partition_{partition_idx}.txt")
-            if partition_file in partition_file.keys():
+            if partition_file in partitions.keys():
                 partitions[partition_file].append((key, value))
             else:
                 partitions[partition_file] = []
@@ -117,6 +117,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                     f.write(f"{key},{','.join(map(str, value))}\n")
 
         print(f"Partitioning done. Total number of partition files: {len(partitions)}")
+        return
     
     async def FetchIntermediateData(self, request, context):
         response = mapreduce_pb2.FetchResponse()

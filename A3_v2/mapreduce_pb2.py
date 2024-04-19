@@ -15,29 +15,39 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\x1a\x1bgoogle/protobuf/empty.proto\"0\n\x0cHealthStatus\x12\x10\n\x08is_alive\x18\x01 \x01(\x08\x12\x0e\n\x06status\x18\x02 \x01(\t\"\xa5\x01\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x01\x12\x18\n\x10input_data_paths\x18\x02 \x03(\t\x12\x19\n\x11single_input_file\x18\x03 \x01(\t\x12\x13\n\x0bstart_index\x18\x04 \x01(\x05\x12\x11\n\tend_index\x18\x05 \x01(\x05\x12\x0f\n\x07task_id\x18\x06 \x01(\t\x12\x16\n\x0enum_partitions\x18\x07 \x01(\x05\"C\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"2\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\"^\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x18\n\x10output_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"\"\n\x0c\x46\x65tchRequest\x12\x12\n\ndata_paths\x18\x01 \x03(\t\"\x1d\n\rFetchResponse\x12\x0c\n\x04\x64\x61ta\x18\x01 \x03(\t2\x95\x01\n\rMapperService\x12\x42\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\"\x00\x12@\n\x0b\x43heckHealth\x12\x16.google.protobuf.Empty\x1a\x17.mapreduce.HealthStatus\"\x00\x32\xef\x01\n\x0eReducerService\x12M\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\x12L\n\x15\x46\x65tchIntermediateData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse\"\x00\x12@\n\x0b\x43heckHealth\x12\x16.google.protobuf.Empty\x1a\x17.mapreduce.HealthStatus\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\x1a\x1bgoogle/protobuf/empty.proto\"0\n\x0cHealthStatus\x12\x10\n\x08is_alive\x18\x01 \x01(\x08\x12\x0e\n\x06status\x18\x02 \x01(\t\"\x1f\n\x08\x43\x65ntroid\x12\x13\n\x0b\x63oordinates\x18\x01 \x03(\x01\"\xa5\x01\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x01\x12\x18\n\x10input_data_paths\x18\x02 \x03(\t\x12\x19\n\x11single_input_file\x18\x03 \x01(\t\x12\x13\n\x0bstart_index\x18\x04 \x01(\x05\x12\x11\n\tend_index\x18\x05 \x01(\x05\x12\x0f\n\x07task_id\x18\x06 \x01(\t\x12\x16\n\x0enum_partitions\x18\x07 \x01(\x05\"C\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x03 \x01(\t\"@\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0c\n\x04keys\x18\x02 \x03(\x05\x12\x0f\n\x07task_id\x18\x03 \x01(\t\"\xc9\x01\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12<\n\tcentroids\x18\x03 \x03(\x0b\x32).mapreduce.ReducerResponse.CentroidsEntry\x12\x0f\n\x07task_id\x18\x04 \x01(\t\x1a\x45\n\x0e\x43\x65ntroidsEntry\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12\"\n\x05value\x18\x02 \x01(\x0b\x32\x13.mapreduce.Centroid:\x02\x38\x01\"A\n\x0c\x46\x65tchRequest\x12\x0c\n\x04keys\x18\x01 \x03(\x05\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x12\x12\n\ndata_paths\x18\x03 \x01(\t\"\x1d\n\tDataPoint\x12\x10\n\x08\x66\x65\x61tures\x18\x01 \x03(\x01\"\x8d\x01\n\rFetchResponse\x12\x39\n\nkey_values\x18\x01 \x03(\x0b\x32%.mapreduce.FetchResponse.KeyValuePair\x1a\x41\n\x0cKeyValuePair\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12$\n\x06values\x18\x02 \x03(\x0b\x32\x14.mapreduce.DataPoint2\xe3\x01\n\rMapperService\x12\x42\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\"\x00\x12L\n\x15\x46\x65tchIntermediateData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse\"\x00\x12@\n\x0b\x43heckHealth\x12\x16.google.protobuf.Empty\x1a\x17.mapreduce.HealthStatus\"\x00\x32\xa3\x01\n\x0eReducerService\x12O\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\"\x00\x12@\n\x0b\x43heckHealth\x12\x16.google.protobuf.Empty\x1a\x17.mapreduce.HealthStatus\"\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'mapreduce_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
+  _globals['_REDUCERRESPONSE_CENTROIDSENTRY']._options = None
+  _globals['_REDUCERRESPONSE_CENTROIDSENTRY']._serialized_options = b'8\001'
   _globals['_HEALTHSTATUS']._serialized_start=59
   _globals['_HEALTHSTATUS']._serialized_end=107
-  _globals['_MAPPERTASK']._serialized_start=110
-  _globals['_MAPPERTASK']._serialized_end=275
-  _globals['_MAPPERRESPONSE']._serialized_start=277
-  _globals['_MAPPERRESPONSE']._serialized_end=344
-  _globals['_REDUCERTASK']._serialized_start=346
-  _globals['_REDUCERTASK']._serialized_end=396
-  _globals['_REDUCERRESPONSE']._serialized_start=398
-  _globals['_REDUCERRESPONSE']._serialized_end=492
-  _globals['_FETCHREQUEST']._serialized_start=494
-  _globals['_FETCHREQUEST']._serialized_end=528
-  _globals['_FETCHRESPONSE']._serialized_start=530
-  _globals['_FETCHRESPONSE']._serialized_end=559
-  _globals['_MAPPERSERVICE']._serialized_start=562
-  _globals['_MAPPERSERVICE']._serialized_end=711
-  _globals['_REDUCERSERVICE']._serialized_start=714
-  _globals['_REDUCERSERVICE']._serialized_end=953
+  _globals['_CENTROID']._serialized_start=109
+  _globals['_CENTROID']._serialized_end=140
+  _globals['_MAPPERTASK']._serialized_start=143
+  _globals['_MAPPERTASK']._serialized_end=308
+  _globals['_MAPPERRESPONSE']._serialized_start=310
+  _globals['_MAPPERRESPONSE']._serialized_end=377
+  _globals['_REDUCERTASK']._serialized_start=379
+  _globals['_REDUCERTASK']._serialized_end=443
+  _globals['_REDUCERRESPONSE']._serialized_start=446
+  _globals['_REDUCERRESPONSE']._serialized_end=647
+  _globals['_REDUCERRESPONSE_CENTROIDSENTRY']._serialized_start=578
+  _globals['_REDUCERRESPONSE_CENTROIDSENTRY']._serialized_end=647
+  _globals['_FETCHREQUEST']._serialized_start=649
+  _globals['_FETCHREQUEST']._serialized_end=714
+  _globals['_DATAPOINT']._serialized_start=716
+  _globals['_DATAPOINT']._serialized_end=745
+  _globals['_FETCHRESPONSE']._serialized_start=748
+  _globals['_FETCHRESPONSE']._serialized_end=889
+  _globals['_FETCHRESPONSE_KEYVALUEPAIR']._serialized_start=824
+  _globals['_FETCHRESPONSE_KEYVALUEPAIR']._serialized_end=889
+  _globals['_MAPPERSERVICE']._serialized_start=892
+  _globals['_MAPPERSERVICE']._serialized_end=1119
+  _globals['_REDUCERSERVICE']._serialized_start=1122
+  _globals['_REDUCERSERVICE']._serialized_end=1285
 # @@protoc_insertion_point(module_scope)

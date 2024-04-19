@@ -3,7 +3,7 @@ import numpy as np
 import os
 import grpc
 import asyncio
-import threading
+import time
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
@@ -118,54 +118,48 @@ class Master:
                     extra_files -= 1
 
         return data_splits
-    
-    async def dispatch_tasks(self, data_splits):
-        tasks = []
+        
+    async def dispatch_and_process_tasks(self, data_splits):
+        tasks = []  # List to store task coroutines
+
         for split_info in data_splits:
             mapper_id = split_info[0]
-            if self.single_file_input:
-                _, start_index, end_index = split_info
-                task = mapreduce_pb2.MapperTask(
-                    centroids=np.array(self.centroids).flatten().tolist(),
-                    input_data_paths=None,
-                    single_input_file=self.single_file_path,
-                    start_index=start_index,
-                    end_index=end_index,
-                    task_id=str(mapper_id),
-                    num_partitions=len(self.alive_reducers.keys())
-                )
-            else:
-                _, files = split_info
-                task = mapreduce_pb2.MapperTask(
-                    centroids=np.array(self.centroids).flatten().tolist(),
-                    input_data_paths=files,
-                    single_input_file=None,
-                    start_index=-1,
-                    end_index=-1,
-                    task_id=str(mapper_id),
-                    num_partitions=len(self.alive_reducers.keys())
-                )
-            tasks.append(self.process_task(task, mapper_id))
-        
+            task = mapreduce_pb2.MapperTask(
+                centroids=np.array(self.centroids).flatten().tolist(),
+                input_data_paths=None if self.single_file_input else [file for file in split_info[1]],
+                single_input_file=self.single_file_path if self.single_file_input else None,
+                start_index=split_info[1] if self.single_file_input else -1,
+                end_index=split_info[2] if self.single_file_input else -1,
+                task_id=str(mapper_id),
+                num_partitions=len(self.alive_reducers.keys())
+            )
+            # Store the coroutine that will process each task
+            tasks.append(self.process_single_task(task, mapper_id))
+
+        # Await all tasks at once to run them in parallel
         results = await asyncio.gather(*tasks)
-        if all(result.success for result in results):  # Check if all tasks were successful
+        print(results)
+
+        # After all tasks are completed, check the results
+        if all(result and result.success for result in results):  # Check if all results are successful and not None
             print("All tasks completed successfully.")
             return True
         else:
-            print("Some tasks failed. Retrying...")
-            await asyncio.sleep(5)  # Wait before retrying
+            print("Some tasks failed or were None.")
             return False
-    
-    async def process_task(self, task, mapper_id):
+
+    async def process_single_task(self, task, mapper_id):
         address = self.mappers[mapper_id]
         async with grpc.aio.insecure_channel(address) as channel:
             stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
             try:
                 response = await stub.ProcessInput(task)
                 print(f"Task sent to mapper {mapper_id}. Response: {response.message}")
+                return response
             except grpc.aio.AioRpcError as e:
                 print(f"Failed to send task to mapper {mapper_id}: {str(e)}")
-                # Optionally, handle reassignment here
+                return None  # Return None to indicate failure
+
 
     def monitor_health(self):
         # Check the health of mappers
@@ -198,10 +192,6 @@ class Master:
                 print(f"Reducer {reducer_id} at {address} is not responding.")
 
         return active_mappers, active_reducers
-
-    def create_grpc_stub(self, address):
-        channel = grpc.insecure_channel(address)
-        return mapreduce_pb2_grpc.MapperServiceStub(channel)
     
     async def invoke_reducers(self):
         self.reducer_responses = []
@@ -242,11 +232,15 @@ class Master:
     def handle_reducer_responses(self):
         # Compile new centroids from reducer responses
         new_centroids = np.zeros((self.num_centroids, len(self.centroids[0])))  # Assuming all centroids have the same dimension
-        counts = np.zeros(self.num_centroids)
+        counts = np.zeros(self.num_centroids, dtype=int)
 
         for response in self.reducer_responses:
-            for key, centroid in response.centroids.items():
-                new_centroids[key] += centroid
+            for key, centroid_message in response.centroids.items():
+                centroid_array = np.array(centroid_message.coordinates)  # Convert list to numpy array
+                if centroid_array.shape[0] != new_centroids.shape[1]:
+                    print(f"Shape mismatch detected: centroid key {key} has shape {centroid_array.shape}, expected {new_centroids.shape[1]}")
+                    continue  # Skip this centroid to avoid crashing
+                new_centroids[key] += centroid_array
                 counts[key] += 1
 
         # Average the centroids
@@ -255,9 +249,9 @@ class Master:
                 new_centroids[i] /= counts[i]
 
         print(f"New centroids calculated: {new_centroids}")
-        self.check_convergence(new_centroids)
+        converge = self.check_convergence(new_centroids)
 
-        return self.check_convergence()
+        return converge
 
     def check_convergence(self, new_centroids):
         # Placeholder for actual convergence checking logic
@@ -291,42 +285,42 @@ class Master:
 
                 if len(self.alive_mappers.keys()) == 0:
                     print("No alive mappers available. Retrying...")
-                    await asyncio.sleep(5)  # Wait before retrying
+                    time.sleep(5)
                     continue
 
                 if len(self.alive_reducers.keys()) == 0:
                     print("No alive reducers available. Retrying...")
-                    await asyncio.sleep(5)  # Wait before retrying
+                    time.sleep(5)
                     continue
 
                 data_splits = self.split_data(data)
 
-                success = await self.dispatch_tasks(data_splits)
+                success = await self.dispatch_and_process_tasks(data_splits)
 
                 if not success:
                     print("One/Some mappers are off. Retrying...")
                     self.alive_mappers, self.alive_reducers = self.monitor_health()
-                    await asyncio.sleep(5)  # Wait before retrying
+                    time.sleep(5)
                     continue
 
                 num_mappers, num_reducers = self.monitor_health()
 
                 # Check if same number of reducers are alive
-                if len(self.alive_mappers.keys()) != num_mappers:
+                if len(self.alive_mappers.keys()) != len(num_mappers.keys()):
                     self.alive_mappers, self.alive_reducers = self.monitor_health()
                     print("Number of mappers changed. Retrying...")
-                    await asyncio.sleep(5)  # Wait before retrying
+                    time.sleep(5)
                     continue
 
                 # Check if same number of reducers are alive
-                if len(self.alive_reducers.keys()) != num_reducers:
+                if len(self.alive_reducers.keys()) != len(num_reducers.keys()):
                     self.alive_mappers, self.alive_reducers = self.monitor_health()
                     print("Number of reducers changed. Retrying...")
-                    await asyncio.sleep(5)  # Wait before retrying
+                    time.sleep(5)
                     continue
 
                 # If all is set, invoke reducers
-                if len(self.alive_reducers.keys()) == num_reducers and len(self.alive_mappers.keys()) == num_mappers:
+                if len(self.alive_reducers.keys()) == len(num_reducers.keys()) and len(self.alive_mappers.keys()) == len(num_mappers.keys()):
                     await self.invoke_reducers()
                     if (self.handle_reducer_responses()):
                         break
