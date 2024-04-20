@@ -12,7 +12,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
         self.state = 'free'  # busy, free, OFFLINE: for response to master if CheckHealth was called
         self.local_dir = './Data/Reducers/'  # Directory to store final output
         self.mappers, self.reducers = self.read_config('./config.txt')
-        print("Reducer started")
+        print("Reducer started, reading configuration...")
 
     def read_config(self, filename):
         mappers = {}
@@ -29,42 +29,49 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                     mappers[service_id] = host + ':' + port
                 elif 'R' in service_id:
                     reducers[service_id] = host + ':' + port
+        print("Configuration loaded: Mappers and Reducers.")
         return mappers, reducers
 
     def CheckHealth(self, request, context):
         # Perform health check
+        print("Health check requested, state:", self.state)
         if self.state == 'free':
-            is_alive = True # Modify this based on health status
+            is_alive = True
             status_message = self.state
         else:
             is_alive = False
             status_message = self.state
         return mapreduce_pb2.HealthStatus(is_alive=is_alive, status=status_message)
-
+    
     async def ProcessIntermediateData(self, request, context):
         self.state = 'busy'
         data = defaultdict(list)
+        print(f"Processing intermediate data for task ID: {request.task_id}")
 
-        # Assume `active_mappers` and fetching logic as previously defined
-        for mapper_id in request.data_paths:  # `data_paths` now stores active mappers
+        for mapper_id in request.data_paths:
             address = self.mappers[mapper_id]
             channel = grpc.aio.insecure_channel(address)
             stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
             fetch_request = mapreduce_pb2.FetchRequest(keys=request.keys, task_id=request.task_id)
             try:
+                print(f"Fetching data from mapper {mapper_id}...")
                 fetch_response = await stub.FetchIntermediateData(fetch_request)
                 for pair in fetch_response.key_values:
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
+                print(f"Data fetched from mapper {mapper_id}: {len(data[pair.key])} items.")
             except grpc.aio.AioRpcError as e:
                 print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
-                continue
 
-        # Create the new centroids with proper structure
+        # Create the new centroids
         new_centroids = {}
         for key, points in data.items():
-            centroid = mapreduce_pb2.Centroid(coordinates=np.mean(np.vstack(points), axis=0).tolist())
-            new_centroids[key] = centroid
+            if points:
+                centroid = np.mean(np.vstack(points), axis=0)
+                new_centroids[key] = mapreduce_pb2.Centroid(coordinates=centroid.tolist())
+                print(f"New centroid for key {key}: {centroid.tolist()}")
+            else:
+                print(f"No data points available for key {key}.")
 
         self.state = 'free'
         return mapreduce_pb2.ReducerResponse(

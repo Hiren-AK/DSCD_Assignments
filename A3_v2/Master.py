@@ -18,6 +18,7 @@ class Master:
         self.centroids = None
         self.converged = False
         self.single_file_input = True
+        self.file_paths = []
         self.single_file_path = None  # To store the path of the single input file
         self.dumpfile = './Data/centroids.txt'
         self.outputfile = './Data/output.txt'
@@ -71,69 +72,74 @@ class Master:
             data = np.loadtxt(files[0], delimiter=',')
             self.single_file_input = True
             self.single_file_path = files[0]  # Store the path of the single input file
-            return data
+            return data, False
         elif len(files) > 1:
             print("multiple files input")
             self.single_file_input = False
-            return files, False
+            data_list = []
+            for file in files:
+                self.file_paths.append(file)
+                data = np.loadtxt(file, delimiter=',')
+                data_list.append(data)
+            return np.vstack(data_list), True
         else:
             print("Input file/s missing")
             return None
-    
+
     def split_data(self, data):
-        active_mappers, _ = self.monitor_health()  # Get the currently available mappers
+        active_mappers, _ = self.monitor_health()
         num_active_mappers = len(active_mappers)
+        data_splits = []
 
         if self.single_file_input:
-            # Handle splitting for a single file input based on line indices
+            # Split single file data by index for each mapper
             num_data_points = len(data)
-            if num_data_points < num_active_mappers:
-                raise ValueError("Not enough data points relative to the number of available mappers")
-
-            data_splits = []
             indices_per_mapper = num_data_points // num_active_mappers
             extra_data = num_data_points % num_active_mappers
             start_index = 0
 
-            for mapper_id in active_mappers.keys():
+            for mapper_id in active_mappers:
                 end_index = start_index + indices_per_mapper + (1 if extra_data > 0 else 0)
                 if extra_data > 0:
                     extra_data -= 1
-                data_splits.append((mapper_id, start_index, end_index))
+                data_splits.append((mapper_id, [self.single_file_path], start_index, end_index))
                 start_index = end_index
         else:
-            # Handle multiple files by distributing files among the available mappers
-            if len(data) < num_active_mappers:
-                raise ValueError("Not enough files relative to the number of available mappers")
-            data_splits = []
+            # Distribute file paths among mappers
             files_per_mapper = len(data) // num_active_mappers
             extra_files = len(data) % num_active_mappers
             data_index = 0
 
-            for mapper_id in active_mappers.keys():
-                files_for_this_mapper = data[data_index:data_index + files_per_mapper + (1 if extra_files > 0 else 0)]
-                data_splits.append((mapper_id, files_for_this_mapper))
-                data_index += len(files_for_this_mapper)
+            for mapper_id in active_mappers:
+                end_index = data_index + files_per_mapper + (1 if extra_files > 0 else 0)
+                files_for_this_mapper = data[data_index:end_index]
+                data_splits.append((mapper_id, files_for_this_mapper, 0, -1))  # No indices needed for multiple files
+                data_index = end_index
                 if extra_files > 0:
                     extra_files -= 1
 
         return data_splits
+
+
         
     async def dispatch_and_process_tasks(self, data_splits):
-        tasks = []  # List to store task coroutines
+        tasks = []
 
         for split_info in data_splits:
             mapper_id = split_info[0]
+            files = split_info[1] if len(split_info[1]) else ['']
+            start_index = split_info[2] if len(split_info) > 2 else -1
+            end_index = split_info[3] if len(split_info) > 3 else -1
             task = mapreduce_pb2.MapperTask(
-                centroids=np.array(self.centroids).flatten().tolist(),
-                input_data_paths=None if self.single_file_input else [file for file in split_info[1]],
-                single_input_file=self.single_file_path if self.single_file_input else None,
-                start_index=split_info[1] if self.single_file_input else -1,
-                end_index=split_info[2] if self.single_file_input else -1,
+                centroids=[mapreduce_pb2.Centroid(coordinates=list(centroid)) for centroid in self.centroids],
+                input_data_paths=files,
+                single_input_file='',
+                start_index=start_index,
+                end_index=end_index,
                 task_id=str(mapper_id),
                 num_partitions=len(self.alive_reducers.keys())
             )
-            # Store the coroutine that will process each task
+            print(task)
             tasks.append(self.process_single_task(task, mapper_id))
 
         # Await all tasks at once to run them in parallel
@@ -266,14 +272,18 @@ class Master:
 
     
     async def run(self):
-        data = self.load_data()
+        data, is_multiple = self.load_data()  # Adjusted to capture two return values
         if data is None:
+            print("Failed to load data.")
             return
 
-        if self.single_file_input:
+        if is_multiple:
+            # If multiple files, data is already loaded as a single combined array
             self.initialize_centroids(data)
+            data = self.file_paths
         else:
-            self.initialize_centroids(np.loadtxt(data[0], delimiter=','))  # Assuming data loading for centroids from the first file if multiple
+            # If a single file, data is loaded directly
+            self.initialize_centroids(data)
         
         i = 0
         while not self.converged and i < self.max_iterations:

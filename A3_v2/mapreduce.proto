@@ -27,7 +27,7 @@ message Centroid {
 
 // Mapper task details sent by the master
 message MapperTask {
-    repeated double centroids = 1; // List of centroids
+    repeated Centroid centroids = 1; // List of centroids
     repeated string input_data_paths = 2;   // Paths to input data files (used in multiple file scenarios)
     string single_input_file = 3;           // Single input file path (used in single file scenario)
     int32 start_index = 4;                  // Starting index for processing in single file scenario
