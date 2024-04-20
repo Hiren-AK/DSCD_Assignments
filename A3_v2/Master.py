@@ -145,7 +145,6 @@ class Master:
 
         # Await all tasks at once to run them in parallel
         results = await asyncio.gather(*tasks)
-        print(results)
 
         # After all tasks are completed, check the results
         if all(result and result.success for result in results):  # Check if all results are successful and not None
@@ -209,8 +208,6 @@ class Master:
             reducer_id = list(self.alive_reducers.keys())[i % len(self.alive_reducers.keys())]
             keys_per_reducer[reducer_id].append(key)
 
-        print(f"keys for reducers for invoking: \n {keys_per_reducer}")
-
         tasks = []
         for reducer_id, address in self.alive_reducers.items():
             task = self.process_reducer_task(
@@ -220,8 +217,6 @@ class Master:
                 address
             )
             tasks.append(task)
-            print("here2")
-            print(task)
 
         if tasks:  # Ensure there are tasks to await
             responses = await asyncio.gather(*tasks)
@@ -258,8 +253,6 @@ class Master:
         counts = self.new_centroids_count
 
         for response in self.reducer_responses:
-            print("here")
-            print(response)
             for key, centroid_message in response.centroids.items():
                 centroid_array = np.array(centroid_message.coordinates)  # Convert list to numpy array
                 if centroid_array.shape[0] != new_centroids.shape[1]:

@@ -145,10 +145,9 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
             if os.path.exists(partition_file):
                 with open(partition_file, 'r') as file:
                     for line in file:
-                        data_point = key_value_pair.values.add()
-                        print(data_point)
-                        data_point.features.extend(map(float, line.strip().split(',')[1:]))
-                        print(data_point)
+                        parts = line.strip().split(',')
+                        data_point = mapreduce_pb2.DataPoint(features=list(map(float, parts[1:])))
+                        response.key_values.add(key=int(parts[0]), values=[data_point])
         return response
 
 def serve():
