@@ -60,6 +60,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                 if distance < min_distance:
                     min_distance, nearest_centroid_idx = distance, i
             output.append((nearest_centroid_idx, point))
+            print(f"Point {point} assigned to centroid {nearest_centroid_idx}")
         return output
 
     def store_output(self, task_id, output):
@@ -67,6 +68,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         os.makedirs(mapper_dir, exist_ok=True)
         self.partitions_dir = mapper_dir
         self.partition(output)
+
 
     def ProcessInput(self, request, context):
         self.state = 'busy'
@@ -144,10 +146,10 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                 with open(partition_file, 'r') as file:
                     for line in file:
                         data_point = key_value_pair.values.add()
+                        print(data_point)
                         data_point.features.extend(map(float, line.strip().split(',')[1:]))
+                        print(data_point)
         return response
-
-
 
 def serve():
     server = grpc.aio.server()

@@ -16,6 +16,8 @@ class Master:
         self.max_iterations = max_iterations
         self.input_data_dir = './Data/Input/'
         self.centroids = None
+        self.new_centroids = None
+        self.new_centroids_count = None
         self.converged = False
         self.single_file_input = True
         self.file_paths = []
@@ -139,7 +141,6 @@ class Master:
                 task_id=str(mapper_id),
                 num_partitions=len(self.alive_reducers.keys())
             )
-            print(task)
             tasks.append(self.process_single_task(task, mapper_id))
 
         # Await all tasks at once to run them in parallel
@@ -208,6 +209,8 @@ class Master:
             reducer_id = list(self.alive_reducers.keys())[i % len(self.alive_reducers.keys())]
             keys_per_reducer[reducer_id].append(key)
 
+        print(f"keys for reducers for invoking: \n {keys_per_reducer}")
+
         tasks = []
         for reducer_id, address in self.alive_reducers.items():
             task = self.process_reducer_task(
@@ -217,8 +220,21 @@ class Master:
                 address
             )
             tasks.append(task)
+            print("here2")
+            print(task)
 
-        await asyncio.gather(*tasks)
+        if tasks:  # Ensure there are tasks to await
+            responses = await asyncio.gather(*tasks)
+            time.sleep(2)
+            for response in responses:
+                if response:
+                    self.reducer_responses.append(response)
+                    print(f"Received response: {response.message}")
+                else:
+                    print(f"Response for a task was None, indicating an issue or a failed task.")
+            print("All reducer tasks completed and responses stored.")
+        else:
+            print("No reducer tasks were initiated.")
 
     async def process_reducer_task(self, active_mappers, keys, reducer_id, address):
         async with grpc.aio.insecure_channel(address) as channel:
@@ -230,17 +246,20 @@ class Master:
             )
             try:
                 response = await stub.ProcessIntermediateData(task)
-                self.reducer_responses.append(response)
                 print(f"Task sent to reducer {reducer_id}. Response: {response.message}")
+                return response
             except grpc.aio.AioRpcError as e:
                 print(f"Failed to send task to reducer {reducer_id}: {str(e)}")
+                return None
     
-    def handle_reducer_responses(self):
+    async def handle_reducer_responses(self):
         # Compile new centroids from reducer responses
-        new_centroids = np.zeros((self.num_centroids, len(self.centroids[0])))  # Assuming all centroids have the same dimension
-        counts = np.zeros(self.num_centroids, dtype=int)
+        new_centroids = self.new_centroids  # Assuming all centroids have the same dimension
+        counts = self.new_centroids_count
 
         for response in self.reducer_responses:
+            print("here")
+            print(response)
             for key, centroid_message in response.centroids.items():
                 centroid_array = np.array(centroid_message.coordinates)  # Convert list to numpy array
                 if centroid_array.shape[0] != new_centroids.shape[1]:
@@ -253,22 +272,26 @@ class Master:
         for i in range(self.num_centroids):
             if counts[i] > 0:
                 new_centroids[i] /= counts[i]
-
+            
+        print(f"Old centroids calculated: {self.centroids}")
         print(f"New centroids calculated: {new_centroids}")
-        converge = self.check_convergence(new_centroids)
+        converge = await self.check_convergence(new_centroids)
 
         return converge
 
-    def check_convergence(self, new_centroids):
-        # Placeholder for actual convergence checking logic
-        # This could involve checking if the centroids have moved less than a certain threshold
-        difference = np.linalg.norm(self.centroids - new_centroids)
-        self.converged = difference < 0.001  # Example threshold
+    async def check_convergence(self, new_centroids):
+        # Calculate differences for each centroid individually
+        differences = np.linalg.norm(self.centroids - new_centroids, axis=1)
+        print(f"Individual differences: {differences}")
+        # Check if all centroids have moved less than the threshold
+        self.converged = np.all(differences < 0.001)
         if self.converged:
-            print("Convergence reached.")
+            print("Convergence reached for all centroids.")
         else:
             print("No convergence yet.")
+        self.centroids=new_centroids
         return self.converged
+
 
     
     async def run(self):
@@ -331,18 +354,24 @@ class Master:
 
                 # If all is set, invoke reducers
                 if len(self.alive_reducers.keys()) == len(num_reducers.keys()) and len(self.alive_mappers.keys()) == len(num_mappers.keys()):
+                    print(f"Mappers done with tasks for iteration {i}, now moving on to reducers")
                     await self.invoke_reducers()
-                    if (self.handle_reducer_responses()):
+                    time.sleep(2)
+                    self.new_centroids = np.zeros((self.num_centroids, len(self.centroids[0])))
+                    self.new_centroids_count = np.zeros(self.num_centroids, dtype=int)
+                    if (await self.handle_reducer_responses()):
                         break
-            self.dump_centroids()
-            i += 1
+                self.dump_centroids(self.converged)
+                i += 1
+                if i > self.max_iterations:
+                    break
         if not self.converged:
             print(f"Reached max iterations, printing output in {self.outputfile}")
             with open(self.outputfile, 'w') as f:  # Open in append mode
                 f.write(f"Centroids: {self.centroids}\n")
         else:
             print(f"Reached convergence, printing output in {self.outputfile}")
-            self.dump_centroids()
+            self.dump_centroids(self.converged)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

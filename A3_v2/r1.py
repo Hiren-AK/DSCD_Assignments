@@ -53,9 +53,11 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
             channel = grpc.aio.insecure_channel(address)
             stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
             fetch_request = mapreduce_pb2.FetchRequest(keys=request.keys, task_id=request.task_id)
+            print(f"fetch request: \n {fetch_request}")
             try:
                 print(f"Fetching data from mapper {mapper_id}...")
                 fetch_response = await stub.FetchIntermediateData(fetch_request)
+                print(f"fetch response: \n {fetch_response}")
                 for pair in fetch_response.key_values:
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
