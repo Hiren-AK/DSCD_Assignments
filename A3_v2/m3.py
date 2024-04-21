@@ -3,7 +3,6 @@ import os
 import numpy as np
 import asyncio
 import shutil  # Import shutil for directory removal
-import random
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
@@ -79,6 +78,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         self.partitions_dir = mapper_dir
         self.centroids = [np.array(centroid.coordinates) for centroid in request.centroids]
         self.num_partitions = request.num_partitions
+        print(f"Task {task_id} acquired, with centroids: {self.centroids}")
 
         data = []
         try:
@@ -107,15 +107,11 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
             output = self.process_data(combined_data)
             self.store_output(task_id, output)
             self.state = 'free'
-            # Randomly decide to fail or succeed
-            if random.random() < 0.5:
-                print("Simulating failure between Master and Mapper")
-                return mapreduce_pb2.MapperResponse()  # Empty response to simulate failure
             return mapreduce_pb2.MapperResponse(success=True, message="Data processed successfully.", task_id=task_id)
         except Exception as e:
-            print(f"Error processing data in mapper {task_id}: {str(e)}")
+            print(f"Error processing data in mapper {task_id}")
             self.state = 'free'
-            return mapreduce_pb2.MapperResponse(success=False, message=str(e), task_id=task_id)
+            return mapreduce_pb2.MapperResponse(success=False, message="", task_id=task_id)
 
     def partition(self, key_values):
         # Partition data
@@ -143,10 +139,6 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
     
     async def FetchIntermediateData(self, request, context):
         print(f"Data request from {request.task_id} for keys: {request.keys}")
-        # Randomly decide to fail or succeed
-        if random.random() < 0.5:
-            print("Simulating failure between Mapper and Reducer")
-            return mapreduce_pb2.FetchResponse()  # Empty response to simulate failure
         response = mapreduce_pb2.FetchResponse()
         for key in request.keys:
             partition_file = self.key_partition_map.get(key, '')
@@ -164,7 +156,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_MapperServiceServicer_to_server(MapperServicer(), server)
-    server.add_insecure_port('[::]:50055')
+    server.add_insecure_port('[::]:50056')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()

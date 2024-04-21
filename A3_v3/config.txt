@@ -1,8 +1,0 @@
-# Mappers
-M1,localhost,50054
-M2,localhost,50055
-M3,localhost,50056
-# Reducers
-R1,localhost,50051
-R2,localhost,50052
-R3,localhost,50053

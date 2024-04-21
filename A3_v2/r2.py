@@ -62,7 +62,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
             except grpc.aio.AioRpcError as e:
-                print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
+                print(f"Failed to fetch data from mapper {mapper_id}")
 
         new_centroids = self.calculate_and_store_centroids(data, request.task_id)
         self.state = 'free'

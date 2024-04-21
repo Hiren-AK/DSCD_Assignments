@@ -2,6 +2,7 @@ import grpc
 import os
 import numpy as np
 import asyncio
+import shutil  # Import shutil for directory removal
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
@@ -33,8 +34,14 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                 elif 'R' in service_id:
                     reducers[service_id] = host + ':' + port
         return mappers, reducers
+    
+    def clean_directory(self, dir_path):
+        """ Safely clean the directory specified by dir_path. """
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path)  # Remove the directory and all its contents
+        os.makedirs(dir_path, exist_ok=True)  # Recreate the directory
 
-    async def CheckHealth(self, request, context):
+    def CheckHealth(self, request, context):
         # Perform health check if needed
         if self.state == 'free':
             is_alive = True # Modify this based on health status
@@ -43,80 +50,84 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
             is_alive = False
             status_message = self.state
         return mapreduce_pb2.HealthStatus(is_alive=is_alive, status=status_message)
-
-    async def ProcessInput(self, request, context):
-        self.state = 'busy'
-        task_id = request.task_id
-        self.centroids = request.centroids
-        input_data_paths = request.input_data_paths
-        single_input_file = request.single_input_file
-        start_index = request.start_index
-        end_index = request.end_index
-        self.num_partitions = request.num_partitions
-
-        print(f"Mapper {task_id} recieved ProcessInput request with centroids {self.centroids}")
-
-        # Load input data
-        if single_input_file:
-            data = np.loadtxt(single_input_file, delimiter=',')
-            data = data[start_index:end_index]
-        else:
-            data = np.concatenate([np.loadtxt(file, delimiter=',') for file in input_data_paths])
-
-        # Process data
+    
+    def process_data(self, data):
         output = []
         for point in data:
-            # Find the nearest centroid
-            nearest_centroid_idx = None
-            min_distance = float('inf')
-
-            # Find the index of the nearest centroid
+            nearest_centroid_idx, min_distance = None, float('inf')
             for i, centroid in enumerate(self.centroids):
                 distance = np.linalg.norm(centroid - point)
                 if distance < min_distance:
-                    min_distance = distance
-                    nearest_centroid_idx = i
-
+                    min_distance, nearest_centroid_idx = distance, i
             output.append((nearest_centroid_idx, point))
+            print(f"Point {point} assigned to centroid {nearest_centroid_idx}")
+        return output
 
-        print("Finished making key-value pairs...")
-
-        # Create directories if not exist
+    def store_output(self, task_id, output):
         mapper_dir = os.path.join(self.local_dir, task_id)
         os.makedirs(mapper_dir, exist_ok=True)
         self.partitions_dir = mapper_dir
+        self.partition(output)
 
+
+    def ProcessInput(self, request, context):
+        self.state = 'busy'
+        task_id = request.task_id
+        mapper_dir = os.path.join(self.local_dir, task_id)
+        self.clean_directory(mapper_dir)  # Clear existing data and prepare directory for new output
+        self.partitions_dir = mapper_dir
+        self.centroids = [np.array(centroid.coordinates) for centroid in request.centroids]
+        self.num_partitions = request.num_partitions
+        print(f"Task {task_id} acquired, with centroids: {self.centroids}")
+
+        data = []
         try:
-            await self.partition(output)
-        except:
-            print("Ran into an issue while partitioning")
-        
-        self.state = 'free'
+            if request.single_input_file:
+                print(f"Attempting to load single file: {request.single_input_file}")
+                file_data = np.loadtxt(request.single_input_file, delimiter=',')[request.start_index:request.end_index]
+                if file_data.size > 0:
+                    data.append(file_data)
+            else:
+                print(f"Input data paths: {request.input_data_paths}")
+                for file in request.input_data_paths:
+                    if os.path.exists(file) and os.path.getsize(file) > 0:
+                        print(f"Loading file: {file}")
+                        loaded_data = np.loadtxt(file, delimiter=',')
+                        if loaded_data.size > 0:
+                            data.append(loaded_data)
+                    else:
+                        print(f"File not found or empty: {file}")
 
-        return mapreduce_pb2.MapperResponse(success=True, message=f"Mapper {task_id} processed data.", task_id=task_id)
+            if not data:
+                print("No valid data found or all files are empty. Sending back success with no action.")
+                self.state = 'free'
+                return mapreduce_pb2.MapperResponse(success=True, message="No valid data to process.", task_id=task_id)
 
-    async def partition(self, key_values):
+            combined_data = np.concatenate(data) if len(data) > 1 else data[0]
+            output = self.process_data(combined_data)
+            self.store_output(task_id, output)
+            self.state = 'free'
+            return mapreduce_pb2.MapperResponse(success=True, message="Data processed successfully.", task_id=task_id)
+        except Exception as e:
+            print(f"Error processing data in mapper {task_id}: {str(e)}")
+            self.state = 'free'
+            return mapreduce_pb2.MapperResponse(success=False, message=str(e), task_id=task_id)
+
+    def partition(self, key_values):
         # Partition data
         print("Patritioning the key value pairs...")
         self.key_partition_map = {}
         partitions = {}
         for key, value in key_values:
-            print("1")
             partition_idx = key % self.num_partitions  # Determine partition index based on key
-            print("2")
             partition_file = os.path.join(self.partitions_dir, f"partition_{partition_idx}.txt")
-            print("3")
-            if partition_file in partition_file.keys():
-                print("4")
+            if partition_file in partitions.keys():
                 partitions[partition_file].append((key, value))
             else:
-                print("5")
                 partitions[partition_file] = []
                 partitions[partition_file].append((key, value))
-            print("6")
             self.key_partition_map[key] = partition_file
 
-        print("7")
         # Write key-value pairs to partition files
         for partition_file, pairs in partitions.items():
             with open(partition_file, 'w') as f:  # Open in append mode
@@ -124,26 +135,28 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
                     f.write(f"{key},{','.join(map(str, value))}\n")
 
         print(f"Partitioning done. Total number of partition files: {len(partitions)}")
+        return
     
     async def FetchIntermediateData(self, request, context):
+        print(f"Data request from {request.task_id} for keys: {request.keys}")
         response = mapreduce_pb2.FetchResponse()
         for key in request.keys:
             partition_file = self.key_partition_map.get(key, '')
             key_value_pair = response.key_values.add()
             key_value_pair.key = key
             if os.path.exists(partition_file):
+                print(f"Sending partion file for centroid id {key} to {request.task_id}")
                 with open(partition_file, 'r') as file:
                     for line in file:
-                        data_point = key_value_pair.values.add()
-                        data_point.features.extend(map(float, line.strip().split(',')))
+                        parts = line.strip().split(',')
+                        data_point = mapreduce_pb2.DataPoint(features=list(map(float, parts[1:])))
+                        response.key_values.add(key=int(parts[0]), values=[data_point])
         return response
-
-
 
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_MapperServiceServicer_to_server(MapperServicer(), server)
-    server.add_insecure_port('[::]:50051')
+    server.add_insecure_port('[::]:50054')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()

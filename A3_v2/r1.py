@@ -1,6 +1,7 @@
 import grpc
 import os
 import numpy as np
+import random
 import asyncio
 from collections import defaultdict
 import shutil
@@ -50,6 +51,20 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
         self.state = 'busy'
         data = defaultdict(list)
         print(f"Processing intermediate data for task ID: {request.task_id}")
+        # Random failure simulation
+        if random.random() > 0.5:  # 50% chance to simulate a failure
+            print(f"Simulating failure for request from {request.task_id} for keys: {request.keys}")
+            # Randomly choose between a timeout or a disconnect
+            if random.random() > 0.5:
+                # Simulate a timeout
+                print("Simulating timeout...")
+                await asyncio.sleep(10)  # sleep to simulate delay causing client-side timeout
+                raise grpc.RpcError("Simulated timeout occurred.")
+            else:
+                # Simulate a disconnect
+                print("Simulating disconnection...")
+                context.abort(grpc.StatusCode.UNAVAILABLE, "Simulated disconnection occurred.")
+            return mapreduce_pb2.ReducerResponse()  # Empty response to simulate failure
 
         for mapper_id in request.data_paths:
             address = self.mappers[mapper_id]
@@ -62,7 +77,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
             except grpc.aio.AioRpcError as e:
-                print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
+                print(f"Failed to fetch data from mapper {mapper_id}")
 
         new_centroids = self.calculate_and_store_centroids(data, request.task_id)
         self.state = 'free'

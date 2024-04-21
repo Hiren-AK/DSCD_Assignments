@@ -163,7 +163,7 @@ class Master:
                 print(f"Task sent to mapper {mapper_id}. Response: {response.message}")
                 return response
             except grpc.aio.AioRpcError as e:
-                print(f"Failed to send task to mapper {mapper_id}: {str(e)}")
+                print(f"Failed to send task to mapper {mapper_id}")
                 return None  # Return None to indicate failure
 
 
@@ -244,33 +244,48 @@ class Master:
                 print(f"Task sent to reducer {reducer_id}. Response: {response.message}")
                 return response
             except grpc.aio.AioRpcError as e:
-                print(f"Failed to send task to reducer {reducer_id}: {str(e)}")
+                print(f"Failed to send task to reducer {reducer_id}")
                 return None
     
     async def handle_reducer_responses(self):
-        # Compile new centroids from reducer responses
-        new_centroids = self.new_centroids  # Assuming all centroids have the same dimension
+        responses = self.reducer_responses
+        new_centroids = self.new_centroids
         counts = self.new_centroids_count
+        valid_responses = 0
 
-        for response in self.reducer_responses:
-            for key, centroid_message in response.centroids.items():
-                centroid_array = np.array(centroid_message.coordinates)  # Convert list to numpy array
-                if centroid_array.shape[0] != new_centroids.shape[1]:
-                    print(f"Shape mismatch detected: centroid key {key} has shape {centroid_array.shape}, expected {new_centroids.shape[1]}")
-                    continue  # Skip this centroid to avoid crashing
-                new_centroids[key] += centroid_array
-                counts[key] += 1
+        for response in responses:
+            if response and all(len(centroid.coordinates) != 0 for centroid in response.centroids.values()):
+                for key, centroid in response.centroids.items():
+                    centroid_array = np.array(centroid.coordinates)  # Convert list to numpy array
+                    if centroid_array.shape[0] != new_centroids.shape[1]:
+                        print(f"Shape mismatch detected: centroid key {key} has shape {centroid_array.shape}, expected {new_centroids.shape[1]}")
+                        continue  # Skip this centroid to avoid crashing
+                    new_centroids[key] += centroid_array
+                    counts[key] += 1
+                valid_responses += 1
+            else:
+                print("Invalid or missing data from a reducer. Retrying iteration...")
+                return False
 
-        # Average the centroids
-        for i in range(self.num_centroids):
-            if counts[i] > 0:
-                new_centroids[i] /= counts[i]
+        if valid_responses == len(self.alive_reducers):
+            for i in range(self.num_centroids):
+                if counts[i] > 0:
+                    new_centroids[i] /= counts[i]
             
-        print(f"Old centroids calculated: {self.centroids}")
-        print(f"New centroids calculated: {new_centroids}")
-        converge = await self.check_convergence(new_centroids)
+            for centroid in new_centroids:
+                if np.all(centroid == 0):
+                    print(f"A centroid value turned zero, retrying...")
+                    return False
 
-        return converge
+                
+            print(f"Old centroids calculated: {self.centroids}")
+            print(f"New centroids calculated: {new_centroids}")
+            self.converged = await self.check_convergence(new_centroids)
+            print("Centroids updated successfully.")
+            return True
+        else:
+            print("One/more reducers ran into some issue, retrying iteration...")
+        return False
 
     async def check_convergence(self, new_centroids):
         # Calculate differences for each centroid individually
@@ -354,10 +369,12 @@ class Master:
                     self.new_centroids_count = np.zeros(self.num_centroids, dtype=int)
                     if (await self.handle_reducer_responses()):
                         break
-                self.dump_centroids(self.converged)
-                i += 1
-                if i > self.max_iterations:
-                    break
+                    else:
+                        continue
+            self.dump_centroids(self.converged)
+            i += 1
+            if i > self.max_iterations:
+                break
         if not self.converged:
             print(f"Reached max iterations, printing output in {self.outputfile}")
             with open(self.outputfile, 'w') as f:  # Open in append mode
