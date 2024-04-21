@@ -19,7 +19,8 @@ mapper_ports = ["mapper1", "mapper2", "mapper3"]
 
 REDUCERS = {
     "reducer1": "50054",
-    "reducer2": "50055"
+    "reducer2": "50055",
+    "reducer3": "50056"
 }
 
 data_path = 'Data/Input/points.txt'
@@ -47,7 +48,7 @@ def random_initial_centroids(data_path, k):
     """
     try:
         data = pd.read_csv(data_path, header=None)
-        centroids = data.sample(n=k).values.tolist()
+        centroids = data.sample(n=k).to_numpy()
         return centroids
     except Exception as e:
         logging.error(f"Error reading the data or selecting centroids: {str(e)}")
@@ -61,8 +62,11 @@ def split_data(num_mappers, data_path):
     data = pd.read_csv(data_path, header=None)
     total_points = len(data)
     chunk_size = total_points // num_mappers
-    data_indices = {f"mapper{i}": (i * chunk_size, (i + 1) * chunk_size if i < num_mappers - 1 else total_points)
-                    for i in range(num_mappers)}
+    data_indices = {}
+    for i in range(num_mappers):
+        start = i * chunk_size
+        end = (i + 1) * chunk_size if i < num_mappers - 1 else total_points
+        data_indices[f"mapper{i+1}"] = (start, end)
     return data_indices
 
 
@@ -83,25 +87,34 @@ async def get_reducer_stubs(num_reducers):
         reducer_stubs[f"reducer{i}"] = mapreduce_pb2_grpc.ReducerServiceStub(channel)
     return reducer_stubs
 
+def serialize_centroids(centroids):
+    """Serialize centroids to ensure they are a flat list of floats."""
+    if isinstance(centroids, np.ndarray):
+        return centroids.flatten().tolist()  # Convert numpy array to flat list
+    elif isinstance(centroids, list):
+        # Ensure each element is float
+        return [float(coord) for coord in centroids]
+    raise ValueError("Centroids must be a list or numpy array")
 
-# Asynchronous function to send tasks to a mapper
-async def send_task_to_mapper(mapper_name, stub, centroids, input_data_path, task_id, num_reducers):
+def save_compiled_centroids(centroids):
+    np.savetxt('Data/centroids.txt', np.array(centroids), delimiter=",", fmt="%f")
+    logging.info("Compiled centroids are saved in Data/centroids.txt")
+
+
+async def send_task_to_mapper(mapper_name, stub, centroids, task_id, num_reducers, indices):
     try:
-        # Log the data types and values
         logging.debug(f"Sending to {mapper_name}: centroids={centroids}, task_id={task_id}, num_reducers={num_reducers}")
 
-        # Ensure centroids are in the correct format (list of floats)
-        if isinstance(centroids, str):
-            centroids = eval(centroids)  # Convert string list to actual list if needed, be cautious with eval
 
-        flat_centroids = [coord for centroid in centroids for coord in centroid]
-        
+        flat_centroids = serialize_centroids(centroids)
+        logging.debug(f"Sending to {mapper_name}: centroids={flat_centroids}, indices={indices}, task_id={task_id}, num_reducers={num_reducers}")
+
         response = await stub.ProcessInput(
             mapreduce_pb2.MapperTask(
                 centroids=flat_centroids,
-                input_data_path=input_data_path,
-                task_id=str(task_id),  # Ensure task_id is a string
-                num_reducers=int(num_reducers)  # Ensure num_reducers is an integer
+                input_data_indices=indices,  # Ensuring indices are sent correctly
+                task_id=str(task_id),
+                num_reducers=int(num_reducers)
             )
         )
         logging.info(f"Response from {mapper_name}: {response.message} for Task {task_id}")
@@ -124,6 +137,7 @@ async def send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers
         )
         tasks.append(task)
 
+    compiled_centroids = []
     try:
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         for response in responses:
@@ -132,14 +146,16 @@ async def send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers
                 continue
             if response.success:
                 logging.info(f"Reducer {reducer_name} processed data successfully with task ID {task_id}")
-                return response.output_data_path
+                # Assume that reducer responses now include the centroid data
+                compiled_centroids.extend(response.centroids)
             else:
                 logging.error(f"Reducer {reducer_name} failed to process data with task ID {task_id}: {response.message}")
-        logging.error("No successful reducer responses were received.")
-        return None
+        if not compiled_centroids:
+            logging.error("No successful reducer responses were received.")
+        return compiled_centroids
     except Exception as e:
         logging.error(f"Failed to send task to reducers with task ID {task_id}: {str(e)}")
-        return None
+        return []
 
 
 async def wait_for_mappers(mapper_stubs):
@@ -156,20 +172,24 @@ async def wait_for_mappers(mapper_stubs):
     return responses
 
 def read_centroids_from_file(file_path):
-    with open(file_path, 'r') as file:
-        centroids = [list(map(float, line.split(','))) for line in file]
-    return centroids
+    try:
+        return np.loadtxt(file_path, delimiter=',')
+    except Exception as e:
+        logging.error(f"Failed to read centroids from {file_path}: {str(e)}")
+        return None
 
 
-def has_converged(old_centroids, new_centroids, tolerance=200):
+
+def has_converged(old_centroids, new_centroids, tolerance=0.0001):
     try:
         # Handle potential string paths to centroid files
         if isinstance(new_centroids, str):
             new_centroids = np.loadtxt(new_centroids, delimiter=",")
-            logging.debug(f"Loaded new centroids from {new_centroids}: {new_centroids}")
+            logging.debug(f"Loaded new centroids from file: {new_centroids}")
+
         if isinstance(old_centroids, str):
             old_centroids = np.loadtxt(old_centroids, delimiter=",")
-            logging.debug(f"Loaded old centroids from {old_centroids}: {old_centroids}")
+            logging.debug(f"Loaded old centroids from file: {old_centroids}")
 
         # Ensure both are numpy arrays
         old_centroids = np.array(old_centroids, dtype=float)
@@ -179,57 +199,61 @@ def has_converged(old_centroids, new_centroids, tolerance=200):
         total_movement = sum(np.linalg.norm(oc - nc) for oc, nc in zip(old_centroids, new_centroids))
         logging.debug(f"Total movement: {total_movement}, Tolerance: {tolerance}")
 
-        return total_movement < tolerance
+        # Convergence check
+        has_converged = total_movement < tolerance
+        logging.debug(f"Convergence check: {'passed' if has_converged else 'failed'}")
+        return has_converged
     except Exception as e:
         logging.error("Error checking convergence:", exc_info=True)
         return False
 
+
+
 async def run_master(num_mappers, num_reducers, num_centroids, max_iterations, data_path):
     initial_centroids = random_initial_centroids(data_path, num_centroids)
-    if not initial_centroids:
+    if initial_centroids.size == 0:
         logging.error("Centroids initialization failed. Exiting.")
         return
     
-    logging.info("Randomly initialized centroids: %s", initial_centroids)
+    logging.info(f"Randomly initialized centroids: {initial_centroids}")
     mapper_stubs = {f"mapper{i+1}": await get_mapper_stub(MAPPERS[f"mapper{i+1}"]) for i in range(num_mappers)}
     reducer_stubs = await get_reducer_stubs(num_reducers)
     current_centroids = initial_centroids
 
     for iteration in range(max_iterations):
-        logging.info("Starting iteration %d", iteration + 1)
+        logging.info(f"Starting iteration {iteration + 1}")
+        logging.debug(f"Current centroids before sending to mappers: {current_centroids}")
         tasks = []
         for i in range(num_mappers):
-            task_id = f"iteration{iteration}_mapper{i+1}"
-            stub = mapper_stubs[f"mapper{i+1}"]
-            # Check if centroids are a filepath and read them if so
-            if isinstance(current_centroids, str) and os.path.exists(current_centroids):
-                current_centroids = read_centroids_from_file(current_centroids)
-            task = send_task_to_mapper(f"mapper{i+1}", stub, current_centroids, data_path, task_id, num_reducers)
+            mapper_id = f"mapper{i+1}"
+            task_id = f"{mapper_id}_{iteration}"
+            stub = mapper_stubs[mapper_id]
+            flat_centroids = serialize_centroids(current_centroids)
+            data_indices = split_data(num_mappers, data_path)[mapper_id]  # Ensure the key is correctly used
+            task = send_task_to_mapper(mapper_id, stub, flat_centroids, task_id, num_reducers, data_indices)
             tasks.append(task)
         
         mapper_responses = await asyncio.gather(*tasks)
-
         if all(response and response.success for response in mapper_responses):
             data_paths = [response.intermediate_data_path for response in mapper_responses if response]
             new_centroids = await send_task_to_reducers(reducer_stubs, data_paths, task_id, num_reducers)
-
-            # Log the outcome of reducer's work
-            if new_centroids is None:
-                logging.error("No new centroids were obtained from reducers.")
+            if new_centroids:
+                save_compiled_centroids(new_centroids)
+                logging.debug(f"New centroids loaded from reducer output: {new_centroids}")
+                if has_converged(current_centroids, new_centroids):
+                    logging.info("Convergence has been reached.")
+                    current_centroids = new_centroids
+                    break
+                else:
+                    logging.info("Updating centroids for the next iteration.")
+                    current_centroids = new_centroids
             else:
-                logging.debug(f"New centroids received from reducers: {new_centroids}")
-            
-            # Proceed to check convergence if new centroids were obtained
-            if new_centroids is not None and has_converged(current_centroids, new_centroids):
-                logging.info("Convergence has been reached.")
-                current_centroids = new_centroids
-            else:
-                logging.error("Convergence not reached or new centroids were invalid.")
+                logging.error("No new centroids were obtained from reducers or they were invalid.")
         else:
             logging.error("One or more mappers failed, aborting this iteration.")
             break
 
-    logging.info("Final centroids: %s", current_centroids)
+    logging.info(f"Final centroids: {current_centroids}")
 
 
 async def main():

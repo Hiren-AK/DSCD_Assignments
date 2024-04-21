@@ -22,25 +22,28 @@ class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
         self.is_active = True
         logging.info(f"Received mapping task with task ID: {request.task_id}")
         try:
-            data = pd.read_csv('Data/Input/points.txt', header=None)
+            start_index, end_index = map(int, request.input_data_indices)
+            data = pd.read_csv('Data/Input/points.txt', header=None, skiprows=start_index, nrows=end_index-start_index)
             centroids = np.array(request.centroids).reshape(-1, data.shape[1])
-            
-            # Calculate distances from each data point to each centroid
+
+            # Calculate distances and determine the closest centroid for each data point
             distances = np.sqrt(((data.to_numpy()[:, np.newaxis] - centroids) ** 2).sum(axis=2))
             closest_centroids = np.argmin(distances, axis=1)
 
             output_dir = f"Data/Mappers/M{request.task_id}/"
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(output_dir, exist_ok=True)
 
-            for i in range(len(request.centroids)):
-                output_path = os.path.join(output_dir, f"partition_{i+1}.txt")
-                assigned_data = data.to_numpy()[closest_centroids == i]
-                if assigned_data.size > 0:
-                    np.savetxt(output_path, assigned_data, delimiter=",")
-                    logging.debug(f"File written: {output_path}")
+            # Create files for each reducer
+            partition_files = [open(os.path.join(output_dir, f"partition_{i+1}.txt"), 'w') for i in range(len(centroids))]
 
-            logging.info(f"Mapping task {request.task_id} completed, data saved to {output_dir}")
+            # Distribute data to the appropriate partition file
+            for point, centroid_index in zip(data.to_numpy(), closest_centroids):
+                np.savetxt(partition_files[centroid_index], [point], delimiter=",", fmt='%f')
+
+            # Close all partition files
+            for file in partition_files:
+                file.close()
+
             self.is_active = False
             return mapreduce_pb2.MapperResponse(
                 success=True,
@@ -50,6 +53,9 @@ class Mapper(mapreduce_pb2_grpc.MapperServiceServicer):
             )
         except Exception as e:
             logging.error(f"Error in mapping task {request.task_id}: {e}", exc_info=True)
+            for file in partition_files:
+                file.close()
+            self.is_active = False
             return mapreduce_pb2.MapperResponse(
                 success=False,
                 message=str(e),
