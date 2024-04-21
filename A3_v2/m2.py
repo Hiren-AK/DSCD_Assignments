@@ -3,6 +3,7 @@ import os
 import numpy as np
 import asyncio
 import shutil  # Import shutil for directory removal
+import random
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
@@ -106,6 +107,10 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
             output = self.process_data(combined_data)
             self.store_output(task_id, output)
             self.state = 'free'
+            # Randomly decide to fail or succeed
+            if random.random() < 0.5:
+                print("Simulating failure between Master and Mapper")
+                return mapreduce_pb2.MapperResponse()  # Empty response to simulate failure
             return mapreduce_pb2.MapperResponse(success=True, message="Data processed successfully.", task_id=task_id)
         except Exception as e:
             print(f"Error processing data in mapper {task_id}: {str(e)}")
@@ -138,6 +143,10 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
     
     async def FetchIntermediateData(self, request, context):
         print(f"Data request from {request.task_id} for keys: {request.keys}")
+        # Randomly decide to fail or succeed
+        if random.random() < 0.5:
+            print("Simulating failure between Mapper and Reducer")
+            return mapreduce_pb2.FetchResponse()  # Empty response to simulate failure
         response = mapreduce_pb2.FetchResponse()
         for key in request.keys:
             partition_file = self.key_partition_map.get(key, '')
