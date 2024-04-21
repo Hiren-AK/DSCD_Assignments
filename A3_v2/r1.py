@@ -1,8 +1,9 @@
-import os
 import grpc
-import asyncio
+import os
 import numpy as np
+import asyncio
 from collections import defaultdict
+import shutil
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
@@ -11,6 +12,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
     def __init__(self):
         self.state = 'free'  # busy, free, OFFLINE: for response to master if CheckHealth was called
         self.local_dir = './Data/Reducers/'  # Directory to store final output
+        self.ensure_directory(self.local_dir)
         self.mappers, self.reducers = self.read_config('./config.txt')
         print("Reducer started, reading configuration...")
 
@@ -32,17 +34,18 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
         print("Configuration loaded: Mappers and Reducers.")
         return mappers, reducers
 
+    def ensure_directory(self, path):
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        os.makedirs(path, exist_ok=True)
+
     def CheckHealth(self, request, context):
-        # Perform health check
         print("Health check requested, state:", self.state)
-        if self.state == 'free':
-            is_alive = True
-            status_message = self.state
-        else:
-            is_alive = False
-            status_message = self.state
-        return mapreduce_pb2.HealthStatus(is_alive=is_alive, status=status_message)
-    
+        return mapreduce_pb2.HealthStatus(
+            is_alive=self.state == 'free',
+            status=self.state
+        )
+
     async def ProcessIntermediateData(self, request, context):
         self.state = 'busy'
         data = defaultdict(list)
@@ -54,25 +57,14 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
             stub = mapreduce_pb2_grpc.MapperServiceStub(channel)
             fetch_request = mapreduce_pb2.FetchRequest(keys=request.keys, task_id=request.task_id)
             try:
-                print(f"Fetching data from mapper {mapper_id}...")
                 fetch_response = await stub.FetchIntermediateData(fetch_request)
                 for pair in fetch_response.key_values:
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
-                print(f"Data fetched from mapper {mapper_id}: {len(data[pair.key])} items.")
             except grpc.aio.AioRpcError as e:
                 print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
 
-        # Create the new centroids
-        new_centroids = {}
-        for key, points in data.items():
-            if points:
-                centroid = np.mean(np.vstack(points), axis=0)
-                new_centroids[key] = mapreduce_pb2.Centroid(coordinates=centroid.tolist())
-                print(f"New centroid for key {key}: {centroid.tolist()}")
-            else:
-                print(f"No data points available for key {key}.")
-
+        new_centroids = self.calculate_and_store_centroids(data, request.task_id)
         self.state = 'free'
         return mapreduce_pb2.ReducerResponse(
             success=True,
@@ -80,6 +72,20 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
             centroids=new_centroids,
             task_id=request.task_id
         )
+
+    def calculate_and_store_centroids(self, data, task_id):
+        new_centroids = {}
+        output_path = os.path.join(self.local_dir, f"{task_id}.txt")
+        with open(output_path, 'w') as file:
+            for key, points in data.items():
+                if points:
+                    centroid = np.mean(np.vstack(points), axis=0)
+                    new_centroids[key] = mapreduce_pb2.Centroid(coordinates=centroid.tolist())
+                    print(f"New centroid for key {key}: {centroid.tolist()}")
+                    file.write(f"{key}: {centroid.tolist()}\n")
+                else:
+                    print(f"No data points available for key {key}.")
+        return new_centroids
 
 def serve():
     server = grpc.aio.server()

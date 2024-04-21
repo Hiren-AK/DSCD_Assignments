@@ -137,12 +137,14 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
         return
     
     async def FetchIntermediateData(self, request, context):
+        print(f"Data request from {request.task_id} for keys: {request.keys}")
         response = mapreduce_pb2.FetchResponse()
         for key in request.keys:
             partition_file = self.key_partition_map.get(key, '')
             key_value_pair = response.key_values.add()
             key_value_pair.key = key
             if os.path.exists(partition_file):
+                print(f"Sending partion file for centroid id {key} to {request.task_id}")
                 with open(partition_file, 'r') as file:
                     for line in file:
                         parts = line.strip().split(',')
