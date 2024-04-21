@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\"_\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x01\x12\x17\n\x0finput_data_path\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x03 \x01(\t\x12\x14\n\x0cnum_reducers\x18\x04 \x01(\x05\"c\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x1e\n\x16intermediate_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"H\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x12\x14\n\x0cnum_reducers\x18\x03 \x01(\x05\"^\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x18\n\x10output_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"-\n\x0c\x46\x65tchRequest\x12\x0c\n\x04keys\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\"\x7f\n\rFetchResponse\x12\x30\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\".mapreduce.FetchResponse.DataEntry\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x0f\n\rStatusRequest\"5\n\x0eStatusResponse\x12\x12\n\nis_running\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd2\x01\n\rMapperService\x12@\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\x12=\n\x08SendData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse\x12@\n\tGetStatus\x12\x18.mapreduce.StatusRequest\x1a\x19.mapreduce.StatusResponse2\x9f\x01\n\x0eReducerService\x12M\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\x12>\n\tFetchData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\"{\n\nMapperTask\x12\x11\n\tcentroids\x18\x01 \x03(\x02\x12\x17\n\x0finput_data_path\x18\x02 \x01(\t\x12\x0f\n\x07task_id\x18\x03 \x01(\t\x12\x14\n\x0cnum_reducers\x18\x04 \x01(\x05\x12\x1a\n\x12input_data_indices\x18\x05 \x03(\x05\"c\n\x0eMapperResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x1e\n\x16intermediate_data_path\x18\x03 \x01(\t\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"H\n\x0bReducerTask\x12\x12\n\ndata_paths\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x12\x14\n\x0cnum_reducers\x18\x03 \x01(\x05\"W\n\x0fReducerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x11\n\tcentroids\x18\x03 \x03(\x02\x12\x0f\n\x07task_id\x18\x04 \x01(\t\"-\n\x0c\x46\x65tchRequest\x12\x0c\n\x04keys\x18\x01 \x03(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\"\x7f\n\rFetchResponse\x12\x30\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\".mapreduce.FetchResponse.DataEntry\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x0f\n\rStatusRequest\"5\n\x0eStatusResponse\x12\x12\n\nis_running\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd2\x01\n\rMapperService\x12@\n\x0cProcessInput\x12\x15.mapreduce.MapperTask\x1a\x19.mapreduce.MapperResponse\x12=\n\x08SendData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponse\x12@\n\tGetStatus\x12\x18.mapreduce.StatusRequest\x1a\x19.mapreduce.StatusResponse2\x9f\x01\n\x0eReducerService\x12M\n\x17ProcessIntermediateData\x12\x16.mapreduce.ReducerTask\x1a\x1a.mapreduce.ReducerResponse\x12>\n\tFetchData\x12\x17.mapreduce.FetchRequest\x1a\x18.mapreduce.FetchResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -24,25 +24,25 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_FETCHRESPONSE_DATAENTRY']._options = None
   _globals['_FETCHRESPONSE_DATAENTRY']._serialized_options = b'8\001'
   _globals['_MAPPERTASK']._serialized_start=30
-  _globals['_MAPPERTASK']._serialized_end=125
-  _globals['_MAPPERRESPONSE']._serialized_start=127
-  _globals['_MAPPERRESPONSE']._serialized_end=226
-  _globals['_REDUCERTASK']._serialized_start=228
-  _globals['_REDUCERTASK']._serialized_end=300
-  _globals['_REDUCERRESPONSE']._serialized_start=302
-  _globals['_REDUCERRESPONSE']._serialized_end=396
-  _globals['_FETCHREQUEST']._serialized_start=398
-  _globals['_FETCHREQUEST']._serialized_end=443
-  _globals['_FETCHRESPONSE']._serialized_start=445
-  _globals['_FETCHRESPONSE']._serialized_end=572
-  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_start=529
-  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_end=572
-  _globals['_STATUSREQUEST']._serialized_start=574
-  _globals['_STATUSREQUEST']._serialized_end=589
-  _globals['_STATUSRESPONSE']._serialized_start=591
-  _globals['_STATUSRESPONSE']._serialized_end=644
-  _globals['_MAPPERSERVICE']._serialized_start=647
-  _globals['_MAPPERSERVICE']._serialized_end=857
-  _globals['_REDUCERSERVICE']._serialized_start=860
-  _globals['_REDUCERSERVICE']._serialized_end=1019
+  _globals['_MAPPERTASK']._serialized_end=153
+  _globals['_MAPPERRESPONSE']._serialized_start=155
+  _globals['_MAPPERRESPONSE']._serialized_end=254
+  _globals['_REDUCERTASK']._serialized_start=256
+  _globals['_REDUCERTASK']._serialized_end=328
+  _globals['_REDUCERRESPONSE']._serialized_start=330
+  _globals['_REDUCERRESPONSE']._serialized_end=417
+  _globals['_FETCHREQUEST']._serialized_start=419
+  _globals['_FETCHREQUEST']._serialized_end=464
+  _globals['_FETCHRESPONSE']._serialized_start=466
+  _globals['_FETCHRESPONSE']._serialized_end=593
+  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_start=550
+  _globals['_FETCHRESPONSE_DATAENTRY']._serialized_end=593
+  _globals['_STATUSREQUEST']._serialized_start=595
+  _globals['_STATUSREQUEST']._serialized_end=610
+  _globals['_STATUSRESPONSE']._serialized_start=612
+  _globals['_STATUSRESPONSE']._serialized_end=665
+  _globals['_MAPPERSERVICE']._serialized_start=668
+  _globals['_MAPPERSERVICE']._serialized_end=878
+  _globals['_REDUCERSERVICE']._serialized_start=881
+  _globals['_REDUCERSERVICE']._serialized_end=1040
 # @@protoc_insertion_point(module_scope)

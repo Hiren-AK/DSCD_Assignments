@@ -41,8 +41,7 @@ class MapperServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def SendData(self, request, context):
-        """Simplified the naming, removed redundancy
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -164,8 +163,7 @@ class ReducerServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def FetchData(self, request, context):
-        """Changed name for clarity
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')

@@ -4,23 +4,23 @@ package mapreduce;
 
 service MapperService {
     rpc ProcessInput(MapperTask) returns (MapperResponse);
-    rpc SendData(FetchRequest) returns (FetchResponse);  // Simplified the naming, removed redundancy
+    rpc SendData(FetchRequest) returns (FetchResponse);
     rpc GetStatus(StatusRequest) returns (StatusResponse);
 }
 
 service ReducerService {
     rpc ProcessIntermediateData(ReducerTask) returns (ReducerResponse);
-    rpc FetchData(FetchRequest) returns (FetchResponse);  // Changed name for clarity
+    rpc FetchData(FetchRequest) returns (FetchResponse);
 }
 
 message MapperTask {
-    repeated double centroids = 1; // List of centroids
-    string input_data_path = 2;     // Path to the input data
-    string task_id = 3;             // Task ID, now a string
-    int32 num_reducers = 4;         // Number of reducers
+    repeated float centroids = 1; // Flat list of centroids
+    string input_data_path = 2;
+    string task_id = 3;
+    int32 num_reducers = 4;
+    repeated int32 input_data_indices = 5; // Indices of data rows to process
 }
 
-// Response from a Mapper
 message MapperResponse {
     bool success = 1;
     string message = 2;
@@ -28,30 +28,26 @@ message MapperResponse {
     string task_id = 4;
 }
 
-// Details of a task sent to a Reducer by the Master
 message ReducerTask {
     repeated string data_paths = 1; // Paths to data files that need to be processed
-    string task_id = 2;              // Task ID for tracking
+    string task_id = 2;
     int32 num_reducers = 3;
 }
 
-// Response from a Reducer
 message ReducerResponse {
-    bool success = 1;               // Indicates if the task was successful
-    string message = 2;             // Error message or success confirmation
-    string output_data_path = 3;    // Where the reducer wrote its final output
-    string task_id = 4;              // Task ID for tracking
+    bool success = 1;
+    string message = 2;
+    repeated float centroids = 3; // Added to include centroids directly in the response
+    string task_id = 4;
 }
 
-// Request for fetching data from Mappers by Reducers
 message FetchRequest {
-    repeated string keys = 1;  // List of centroid IDs or partition identifiers requested by the Reducer
-    string task_id = 2;  // Make sure this exists
+    repeated string keys = 1;
+    string task_id = 2;
 }
 
-// Response for fetching data
 message FetchResponse {
-    map<string, string> data = 1;  // Maps centroid ID to data points in string format
+    map<string, string> data = 1;  // Maps key to data points in string format
     string task_id = 2;
 }
 
