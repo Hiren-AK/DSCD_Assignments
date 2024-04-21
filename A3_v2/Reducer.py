@@ -62,7 +62,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
                     for data_point in pair.values:
                         data[pair.key].append(np.array(data_point.features))
             except grpc.aio.AioRpcError as e:
-                print(f"Failed to fetch data from mapper {mapper_id}: {str(e)}")
+                print(f"Failed to fetch data from mapper {mapper_id}")
 
         new_centroids = self.calculate_and_store_centroids(data, request.task_id)
         self.state = 'free'
@@ -90,7 +90,7 @@ class ReducerServicer(mapreduce_pb2_grpc.ReducerServiceServicer):
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_ReducerServiceServicer_to_server(ReducerServicer(), server)
-    server.add_insecure_port('[::]:50051')
+    server.add_insecure_port('[::]:50052')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()

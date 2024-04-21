@@ -109,9 +109,9 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
             self.state = 'free'
             return mapreduce_pb2.MapperResponse(success=True, message="Data processed successfully.", task_id=task_id)
         except Exception as e:
-            print(f"Error processing data in mapper {task_id}: {str(e)}")
+            print(f"Error processing data in mapper {task_id}")
             self.state = 'free'
-            return mapreduce_pb2.MapperResponse(success=False, message=str(e), task_id=task_id)
+            return mapreduce_pb2.MapperResponse(success=False, message="", task_id=task_id)
 
     def partition(self, key_values):
         # Partition data
@@ -156,7 +156,7 @@ class MapperServicer(mapreduce_pb2_grpc.MapperServiceServicer):
 def serve():
     server = grpc.aio.server()
     mapreduce_pb2_grpc.add_MapperServiceServicer_to_server(MapperServicer(), server)
-    server.add_insecure_port('[::]:50054')
+    server.add_insecure_port('[::]:50055')
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.start())
     loop.run_forever()
