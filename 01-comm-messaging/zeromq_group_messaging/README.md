@@ -1,27 +1,16 @@
 # ZeroMQ Group Messaging
 
-Overview
-
-Group messaging application implemented using ZeroMQ patterns to enable group broadcasts and routed messaging between clients.
-
-Stack
-- Python 3.x
-- pyzmq (ZeroMQ)
-
-Key files
-- Message_server.py — central message router
-- Group.py — group management logic
-- user.py — client interface
+Files moved from A1/ZeroMQ_MessagingApp:
+- Group.py
+- Message_server.py
+- user.py
 
 How to run
 
-1) Install pyzmq:
-
 ```bash
 pip install pyzmq
+cd 01-comm-messaging/zeromq_group_messaging
+python Message_server.py
+python Group.py
+python user.py
 ```
-
-2) Start the server and clients according to the scripts in this folder.
-
-Resume-ready summary
-- Implemented a ZeroMQ-based group chat demonstrating pub/sub and routing patterns for low-latency messaging.
